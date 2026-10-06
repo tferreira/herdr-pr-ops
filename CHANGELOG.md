@@ -3,6 +3,14 @@
 Versions follow [semantic versioning](https://semver.org). Before 1.0 the
 board, keys and config can still change between minor versions.
 
+## Unreleased
+
+### Added
+- Remote-friendly links: `y` copies through the terminal (OSC 52) when the
+  board runs over SSH or without a display, and `o` / `f` copy the link
+  there instead of opening a browser on the wrong machine. `openLinks`
+  config (`auto`, `browser`, `copy`).
+
 ## 0.4.3 - 2026-10-06
 
 ### Fixed

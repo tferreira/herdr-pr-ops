@@ -1071,17 +1071,49 @@ function current() {
   return s && s.pr;
 }
 
-function openUrl(url) {
+// Is the board running away from the screen you look at (herdr --remote,
+// SSH) or on a machine without a display? Then a browser would open on the
+// wrong machine, or nowhere. `openLinks` in config overrides: auto, browser,
+// copy.
+function noLocalBrowser() {
+  const mode = U.config().openLinks || "auto";
+  if (mode === "copy") return true;
+  if (mode === "browser") return false;
+  if (process.env.SSH_CONNECTION || process.env.SSH_TTY || process.env.SSH_CLIENT) return true;
+  return process.platform === "linux" && !process.env.DISPLAY && !process.env.WAYLAND_DISPLAY;
+}
+
+// OSC 52: the terminal you look at puts the text on its own clipboard. Herdr
+// passes it through to the outer terminal, also over --remote.
+function osc52(text) {
+  process.stdout.write(`\x1b]52;c;${Buffer.from(text).toString("base64")}\x07`);
+}
+
+// Open a link in the browser, or copy it when there is no browser here.
+function openLink(url, what) {
+  if (noLocalBrowser()) {
+    osc52(url);
+    return say(`⧉ ${what} LINK COPIED · NO BROWSER ON THIS MACHINE`, C.cyan, 3000);
+  }
   const cmd = process.platform === "darwin" ? "open" : "xdg-open";
-  spawn(cmd, [url], { detached: true, stdio: "ignore" }).unref();
+  const child = spawn(cmd, [url], { detached: true, stdio: "ignore" });
+  child.on("error", () => {
+    osc52(url);
+    say(`⧉ ${what} LINK COPIED · ${cmd} IS MISSING`, C.cyan, 3000);
+  });
+  child.unref();
+  say(`↗ ${what} OPENED`, C.cyan, 1500);
 }
 
 function copy(text) {
-  const cmds = process.platform === "darwin" ? [["pbcopy"]] : [["wl-copy"], ["xclip", "-selection", "clipboard"], ["xsel", "-b", "-i"]];
-  for (const [cmd, ...args] of cmds) {
-    const r = require("node:child_process").spawnSync(cmd, args, { input: text });
-    if (!r.error && r.status === 0) return;
+  if (!noLocalBrowser()) {
+    const cmds = process.platform === "darwin" ? [["pbcopy"]] : [["wl-copy"], ["xclip", "-selection", "clipboard"], ["xsel", "-b", "-i"]];
+    for (const [cmd, ...args] of cmds) {
+      const r = require("node:child_process").spawnSync(cmd, args, { input: text });
+      if (!r.error && r.status === 0) return;
+    }
   }
+  osc52(text);
 }
 
 function quit(after) {
@@ -1425,8 +1457,7 @@ function onKey(k) {
         copy(pr.ticketUrl);
         return say("⧉ TICKET URL COPIED", C.cyan, 1500);
       }
-      openUrl(pr.ticketUrl);
-      return say("↗ TICKET OPENED", C.cyan, 1500);
+      return openLink(pr.ticketUrl, "TICKET");
     }
     if (k === "x" && !pr.launchState) return stopAgent(pr);
     if ("rcdfz ".includes(k)) return say("NO PR YET · ↵ JUMPS TO THE AGENT", C.amber);
@@ -1473,11 +1504,9 @@ function onKey(k) {
       return launch(act.kind, pr);
     }
     case "o":
-      openUrl(pr.url);
-      return say("↗ OPENED IN BROWSER", C.cyan, 1500);
+      return openLink(pr.url, "PR");
     case "f":
-      openUrl(`${pr.url}/files`);
-      return say("↗ FILES CHANGED", C.cyan, 1500);
+      return openLink(`${pr.url}/files`, "FILES");
     case "y":
       copy(pr.url);
       return say("⧉ URL COPIED", C.cyan, 1500);

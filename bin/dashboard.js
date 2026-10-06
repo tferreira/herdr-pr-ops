@@ -245,6 +245,19 @@ function buildWork() {
     out.push(workItem(agents.get(v.task), m));
     taken.add(v.task);
   }
+  // Tasks still launching, or whose launch failed: a card without an agent.
+  for (const [key, L] of Object.entries(launches)) {
+    if (!key.startsWith("task:") || !L.task) continue;
+    if (L.state !== "starting" && L.state !== "error") continue;
+    const t = L.task;
+    out.push({
+      ...workItem({ pane_id: `launch:${key}`, terminal_title_stripped: "" }, { id: t.id, label: t.label, url: t.url, repoName: t.repoName, repo: (checkoutInfo(t.repoPath) || {}).repo, branch: "" }),
+      title: L.state === "error" ? `launch failed: ${L.msg}` : `starting: ${L.msg || "queued"}`,
+      launchKey: key,
+      launchState: L.state,
+      taskSpec: t,
+    });
+  }
   for (const a of agents.values()) {
     if (linked.has(a.pane_id) || taken.has(a.pane_id)) continue;
     const info = checkoutInfo(a.foreground_cwd || a.cwd);
@@ -322,6 +335,7 @@ function pollFiles() {
     }
   } catch {}
   launches = U.readJSON(U.paths.launches, {});
+  if (agents.size) work = buildWork();
 }
 
 // full: refetch every PR (the R key); otherwise only what changed.
@@ -432,6 +446,14 @@ const pulse = (a, b, period = 1200) => mix(a, b, (Math.sin((Date.now() / period)
 // ── chips ──────────────────────────────────────────────────────────────────
 function chips(pr, bg) {
   const out = [];
+  if (pr.work && pr.launchState) {
+    out.push(
+      pr.launchState === "error"
+        ? S("✕ LAUNCH FAILED · ↵ RETRIES", { fg: C.red, bg, bold: true })
+        : S(`${SWEEP[tick % 4]} STARTING AGENT`, { fg: pulse(C.cyan, C.violet, 800), bg, bold: true }),
+    );
+    return out;
+  }
   if (pr.work) {
     if (pr.ticketLabel) out.push(S(pr.ticketLabel.toUpperCase(), { fg: C.violet, bg, bold: true }));
     if (pr.headRef) out.push(S(`⎇ ${pr.headRef}`, { fg: C.mute, bg }));
@@ -721,6 +743,8 @@ function flush(out) {
 // ("↵ r REVIEW") so the bar keeps a fixed layout and shows what enter does.
 function actionKeys(sel, key) {
   const pr = sel && sel.pr;
+  if (pr && pr.work && pr.launchState === "error") return key(" ↵ ", "RETRY") + key(" o ", "TICKET", !!pr.ticketUrl);
+  if (pr && pr.work && pr.launchState) return key(" ↵ ", "STARTING", false);
   if (pr && pr.work) return key(" ↵ ", "JUMP") + key(" o ", pr.ticketUrl ? "TICKET" : "OPEN", !!pr.ticketUrl);
   const ag = pr && agentFor(pr);
   const act = pr && !ag ? enterAction(pr) : null;
@@ -902,6 +926,10 @@ function taskKey(k) {
 
 function launchTask(t) {
   if (DEMO) return say(`DEMO MODE · WOULD START ${t.id} IN ${t.repoName}`, C.violet);
+  const all = U.readJSON(U.paths.launches, {});
+  all[`task:${t.id}`] = { kind: "task", state: "starting", msg: "queued", at: new Date().toISOString(), task: t };
+  U.writeJSON(U.paths.launches, all);
+  launches = all;
   const child = spawn(process.execPath, [path.join(__dirname, "launch.js"), "task", JSON.stringify(t)], {
     detached: true,
     stdio: "ignore",
@@ -1355,6 +1383,8 @@ function onKey(k) {
   }
   if (!pr) return;
   if (pr.work) {
+    if (k === "\r" && pr.launchState === "error") return launchTask(pr.taskSpec);
+    if (k === "\r" && pr.launchState) return say("STILL STARTING", C.amber);
     if (k === "\r") {
       const ag = agentFor(pr);
       if (!ag) return;
@@ -1452,6 +1482,7 @@ function main() {
         agents = new Map((JSON.parse(out).result.agents || []).map((a) => [a.pane_id, a]));
         links = linkAgents(agents, data.prs, agentMap);
       } catch {}
+      work = buildWork();
     }
     replay();
     if (process.env.SNAP_FX) {

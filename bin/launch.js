@@ -30,7 +30,7 @@ function setStatus(state, msg = "") {
   const all = readJSON(paths.launches, {});
   for (const k of keys) {
     if (state === "done") delete all[k];
-    else all[k] = { kind, state, msg, at: new Date().toISOString() };
+    else all[k] = { ...(all[k] || {}), kind, state, msg, at: new Date().toISOString() };
   }
   writeJSON(paths.launches, all);
 }
@@ -246,6 +246,7 @@ async function runTask(t) {
   setStatus("starting", "opening pane");
   const pane = taskPane(t);
   setStatus("starting", "starting agent");
+  const branch = require("../lib/tickets").branchName(t);
   const name = `t-${branch.toLowerCase().replace(/[^a-z0-9_-]/g, "-")}`.slice(0, 32);
   await startAgent(name, pane);
   const fresh = readJSON(paths.agents, {});

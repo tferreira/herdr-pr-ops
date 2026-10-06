@@ -3,6 +3,13 @@
 Versions follow [semantic versioning](https://semver.org). Before 1.0 the
 board, keys and config can still change between minor versions.
 
+## Unreleased
+
+### Changed
+- Re-check only for signals meant for you: re-requested, replies in your
+  threads, or new commits after you requested changes. New commits after a
+  comment or a dismissed review leave the PR in Waiting, tagged "new commits".
+
 ## 0.3.0 - 2026-10-06
 
 ### Added

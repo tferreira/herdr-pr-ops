@@ -35,8 +35,10 @@ each one in the right checkout.
   yours to configure.
 - **Agents on the board.** Each card shows the agent working on that PR,
   herdr-radar style: spinner while working, a pulsing `?` when it waits on
-  you, `✓` when done. Agents you started by hand count too: a checkout on the
-  PR's branch is enough. `enter` jumps to the agent's pane.
+  you, `✓` when done. Agents you started by hand count too, matched by their
+  title, their folder's branch and, for Claude Code, the PR URLs, worktree
+  paths, branches and ticket IDs in their recent session. `enter` jumps to the
+  agent's pane.
 - **Notifications** for new review requests, PRs to re-check, and approvals,
   change requests, CI failures, conflicts and questions on your PRs.
 - **Cheap on the GitHub API.** A light scan every 3 minutes costs about one
@@ -187,6 +189,7 @@ sh tools/screenshots.sh                            # regenerate assets/
 | `lib/header.js` | the animated logo band |
 | `lib/marks.js` | agent marks |
 | `lib/gitinfo.js` | repo and branch of a directory |
+| `lib/agentlink.js` | which PR each agent is working on |
 
 ## License
 

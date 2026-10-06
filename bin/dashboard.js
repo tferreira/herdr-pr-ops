@@ -193,38 +193,33 @@ function move(dx, dy) {
 }
 
 // ── agents & launches ──────────────────────────────────────────────────────
+const { linkAgents } = require("../lib/agentlink");
+let links = new Map(); // pr url -> [agent]
+
 function pollAgents() {
   if (DEMO) {
     agents = demo.agents();
     agentMap = demo.agentMap();
+    links = linkAgents(agents, data.prs, agentMap);
     return;
   }
+  agentMap = U.readJSON(U.paths.agents, {});
   execFile(process.env.HERDR_BIN_PATH || "herdr", ["agent", "list"], { encoding: "utf8", timeout: 5000 }, (err, out) => {
     if (err) return;
     try {
       const list = JSON.parse(out).result.agents || [];
       agents = new Map(list.map((a) => [a.pane_id, a]));
+      links = linkAgents(agents, data.prs, agentMap);
     } catch {}
   });
-  agentMap = U.readJSON(U.paths.agents, {});
 }
 
-const { checkoutInfo } = require("../lib/gitinfo");
 const URGENCY = { blocked: 0, done: 1, working: 2, idle: 3, unknown: 4 };
 
-// Every live agent on a PR: the ones this dashboard launched, plus any agent
-// whose checkout is the PR's branch (head branch for my PRs, pr-<N> for
-// review worktrees). Most urgent first.
+// Live agents on a PR, most urgent first. See lib/agentlink.js for how an
+// agent is matched to a PR.
 function agentsFor(pr) {
-  const found = new Map();
-  const m = agentMap[pr.url] || {};
-  for (const slot of ["review", "deploy"]) if (m[slot] && agents.has(m[slot])) found.set(m[slot], agents.get(m[slot]));
-  for (const a of agents.values()) {
-    const info = checkoutInfo(a.foreground_cwd || a.cwd);
-    if (!info || !info.repo || info.repo.toLowerCase() !== pr.repo.toLowerCase()) continue;
-    if (info.branch === pr.headRef || info.branch === `pr-${pr.number}`) found.set(a.pane_id, a);
-  }
-  return [...found.values()].sort((a, b) => (URGENCY[a.agent_status] ?? 9) - (URGENCY[b.agent_status] ?? 9));
+  return (links.get(pr.url) || []).slice().sort((a, b) => (URGENCY[a.agent_status] ?? 9) - (URGENCY[b.agent_status] ?? 9));
 }
 
 function agentFor(pr) {
@@ -953,6 +948,14 @@ function main() {
     if (SNAP[2] !== undefined) openTask(SNAP[2]);
     pollFiles();
     pollAgents();
+    if (!DEMO) {
+      // pollAgents is async; a snapshot needs the agents now.
+      try {
+        const out = require("node:child_process").execFileSync(process.env.HERDR_BIN_PATH || "herdr", ["agent", "list"], { encoding: "utf8" });
+        agents = new Map((JSON.parse(out).result.agents || []).map((a) => [a.pane_id, a]));
+        links = linkAgents(agents, data.prs, agentMap);
+      } catch {}
+    }
     if (process.env.SNAP_FX) {
       // Freeze a shooting star and a shimmer mid-flight for design checks.
       const now = Date.now();

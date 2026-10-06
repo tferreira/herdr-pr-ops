@@ -11,6 +11,7 @@
 // repo's workspace. The dashboard runs this detached and follows progress
 // through launches.json.
 
+const { checkoutInfo } = require("../lib/gitinfo");
 const { paths, readJSON, writeJSON, config, log, herdr, sh, localRepoPath, HOME, fill } = require("../lib/util");
 
 const argv = process.argv.slice(2);
@@ -24,6 +25,8 @@ const url = keys[0];
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 function setStatus(state, msg = "") {
+  // Git and SSH errors carry \r and newlines that would garble the footer.
+  msg = String(msg).replace(/[\x00-\x1f\x7f]+/g, " ").trim();
   const all = readJSON(paths.launches, {});
   for (const k of keys) {
     if (state === "done") delete all[k];
@@ -70,6 +73,31 @@ function rootPane(result) {
   return panes[0].pane_id;
 }
 
+// Fetch over HTTPS with gh's token. Plugin processes run inside the Herdr
+// server, which often has no SSH agent, so `git fetch origin` over SSH fails
+// with "Permission denied (publickey)" there even when it works in a pane.
+// The URL names port 443 so a common `url.git@github.com:.insteadOf
+// https://github.com/` rule does not turn it back into SSH, and the token
+// travels in git's environment config, never in argv.
+let ghToken = null;
+function fetchGh(repoPath, nameWithOwner, refspecs) {
+  if (!ghToken) ghToken = sh("gh", ["auth", "token"]).trim();
+  const base = "https://github.com:443/";
+  const auth = Buffer.from(`x-access-token:${ghToken}`).toString("base64");
+  const env = {
+    ...process.env,
+    GIT_TERMINAL_PROMPT: "0",
+    GIT_CONFIG_COUNT: "1",
+    GIT_CONFIG_KEY_0: `http.${base}.extraHeader`,
+    GIT_CONFIG_VALUE_0: `Authorization: Basic ${auth}`,
+  };
+  try {
+    sh("git", ["-C", repoPath, "fetch", "--quiet", `${base}${nameWithOwner}.git`, ...refspecs], { env });
+  } catch (e) {
+    throw new Error(`git fetch ${nameWithOwner}: ${e.message.split(": ").slice(-1)[0]}`);
+  }
+}
+
 // My own PR: an existing checkout of its branch (moved to origin's head when
 // clean), or a new worktree of it.
 function addressPane(pr) {
@@ -78,7 +106,7 @@ function addressPane(pr) {
   if (!repo) return rootPane(herdr(["workspace", "create", "--cwd", HOME, "--label", label, "--no-focus"]));
   const branch = pr.headRef;
   setStatus("starting", "fetching branch");
-  sh("git", ["-C", repo, "fetch", "--quiet", "origin", branch]);
+  fetchGh(repo, pr.repo, [`+refs/heads/${branch}:refs/remotes/origin/${branch}`]);
   const remote = `refs/remotes/origin/${branch}`;
   const wts = herdr(["worktree", "list", "--cwd", repo]).worktrees || [];
   const wt = wts.find((w) => w.branch === branch);
@@ -117,7 +145,7 @@ function reviewPane(pr) {
   const branch = `pr-${pr.number}`;
   const ref = `refs/remotes/origin/pr/${pr.number}`;
   setStatus("starting", "fetching PR head");
-  sh("git", ["-C", repo, "fetch", "--quiet", "origin", `+refs/pull/${pr.number}/head:${ref}`]);
+  fetchGh(repo, pr.repo, [`+refs/pull/${pr.number}/head:${ref}`]);
 
   const wts = herdr(["worktree", "list", "--cwd", repo]).worktrees || [];
   const wt = wts.find((w) => w.branch === branch);
@@ -181,7 +209,15 @@ function taskPane(t) {
   const repo = t.repoPath;
   const branch = t.id;
   setStatus("starting", "fetching origin");
-  sh("git", ["-C", repo, "fetch", "--quiet", "origin"]);
+  let base;
+  try {
+    base = sh("git", ["-C", repo, "symbolic-ref", "--short", "refs/remotes/origin/HEAD"]).trim();
+  } catch {
+    base = "origin/master";
+  }
+  const nameWithOwner = (checkoutInfo(repo) || {}).repo;
+  if (nameWithOwner) fetchGh(repo, nameWithOwner, [`+refs/heads/${base.replace(/^origin\//, "")}:refs/remotes/${base}`]);
+  else sh("git", ["-C", repo, "fetch", "--quiet", "origin"]);
   const wtPath = fill(config().taskWorktreePath, { repo, slug: slug(t) });
   const wts = herdr(["worktree", "list", "--cwd", repo]).worktrees || [];
   const wt = wts.find((w) => w.branch === branch || w.path === wtPath);
@@ -198,15 +234,7 @@ function taskPane(t) {
   } catch {
     hasBranch = false;
   }
-  if (!hasBranch) {
-    let base;
-    try {
-      base = sh("git", ["-C", repo, "symbolic-ref", "--short", "refs/remotes/origin/HEAD"]).trim();
-    } catch {
-      base = "origin/master";
-    }
-    args.push("--base", base);
-  }
+  if (!hasBranch) args.push("--base", base);
   setStatus("starting", "creating worktree");
   return rootPane(herdr(args));
 }

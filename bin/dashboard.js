@@ -313,30 +313,9 @@ function agentFor(pr) {
   return agentsFor(pr)[0] || null;
 }
 
-// Card border badge, herdr-radar style: logo, lifecycle mark, label.
-const { agentMark, glyphs, setGlyphMode } = require("../lib/marks");
+// Card border badge: logo, lifecycle mark, label.
+const { agentMark, icons } = require("../lib/marks");
 
-// Opened with the open-remote action: this screen is attached from another
-// machine, so use the "remote" settings for this session.
-// Remote-screen mode: the open-remote action turns it on for one session,
-// and the m key toggles it (remembered in ui.json) for people who would
-// rather not bind anything on the machine they attach from.
-let REMOTE_SCREEN = !DEMO && !!ui.remoteScreen;
-try {
-  const m = U.readJSON(U.paths.pendingMode, null);
-  if (m && m.remote && Date.now() - (m.at || 0) < 60000) REMOTE_SCREEN = true;
-  if (m) fs.unlinkSync(U.paths.pendingMode);
-} catch {}
-setGlyphMode(REMOTE_SCREEN ? U.config().remote.glyphs : null);
-
-function toggleRemoteScreen() {
-  REMOTE_SCREEN = !REMOTE_SCREEN;
-  ui.remoteScreen = REMOTE_SCREEN;
-  saveUi();
-  setGlyphMode(REMOTE_SCREEN ? U.config().remote.glyphs : null);
-  lastLines = [];
-  say(REMOTE_SCREEN ? "⇄ REMOTE SCREEN · LINKS COPIED HERE, PLAIN ICONS · m TO UNDO" : "▣ THIS SCREEN · LINKS OPEN THE BROWSER · m TO UNDO", C.amber, 4000);
-}
 function agentBadge(pr, bg) {
   const list = agentsFor(pr);
   if (!list.length) return "";
@@ -568,9 +547,9 @@ function card(pr, w, isSel, laneCol) {
   const inner = w - 2;
 
   // top: ╭─  #1872 ───────── octocat · 21m ─╮
-  const font = glyphs().done !== "✓";
+  const g = icons();
   const merged = pr.quiet && pr.quiet.kind === "merged";
-  const prIcon = merged ? (font ? "\uf419" : "●") : draft ? (font ? "\uf4dd" : "◌") : font ? "\uf407" : "●";
+  const prIcon = merged ? g.merged : draft ? g.draft : g.pr;
   const num = pr.work
     ? S(isSel ? "▶ " : "", { fg: C.white, bg, bold: true }) +
       S(`◇ ${pr.ticket.length > 18 ? pr.ticket.slice(0, 17) + "…" : pr.ticket}`, { fg: isSel ? C.white : C.violet, bg, bold: true })
@@ -650,7 +629,7 @@ function render() {
       : [["◉", { fg: pulse(C.green, C.bg, 2400) }], [` SYNC ${ago(data.fetchedAt) || "—"}`, { fg: C.mute }]];
   const text = [
     { row: 1, x: Header.LOGO_END + 3, runs: [["pull request mission control", { fg: C.dim, italic: true }]] },
-    { row: 1, x: -2, runs: [...(REMOTE_SCREEN ? [["⇄ REMOTE SCREEN   ", { fg: C.amber, bold: true }]] : []), [`@${data.me || "?"}   `, { fg: C.violet }], ...sync] },
+    { row: 1, x: -2, runs: [[`@${data.me || "?"}   `, { fg: C.violet }], ...sync] },
     { row: 2, x: -2, runs: [...agentSummary(), [clock, { fg: C.mute }]] },
   ];
   for (const l of header.render(W, Date.now(), text)) out.push(line(l));
@@ -905,11 +884,10 @@ function overlayHelp(out, W, H) {
     ["enter", "jump to the PR's agent; none yet: review / re-check / status report"],
     ["x x", "stop the card's agent (press twice); the PR stays"],
     ["o / f", "open PR / files changed in the browser"],
-    ["y", "copy PR url"],
+    ["y", "copy PR url (to the screen you look at, also over --remote)"],
     ["z / s", "snooze until the PR changes / show snoozed"],
     ["n", "new task from a ticket: GitHub, Jira, Linear, YouTrack, Sentry"],
     [",", "settings: edit config.json in $EDITOR"],
-    ["m", "screen mode: remote (herdr --remote) / this screen"],
     ["/", "filter by repo, title, author"],
     ["R  F5", "scan GitHub now"],
     ["q  esc", "close"],
@@ -1111,13 +1089,10 @@ function current() {
   return s && s.pr;
 }
 
-// Is the board running away from the screen you look at (herdr --remote,
-// SSH) or on a machine without a display? Then a browser would open on the
-// wrong machine, or nowhere. `openLinks` in config overrides: auto, browser,
-// copy.
+// A machine without a display (plain SSH, a headless Linux server) has no
+// browser to open. `openLinks` in config overrides: auto, browser, copy.
 function noLocalBrowser() {
-  const cfg = U.config();
-  const mode = (REMOTE_SCREEN ? cfg.remote.openLinks : cfg.openLinks) || "auto";
+  const mode = U.config().openLinks || "auto";
   if (mode === "copy") return true;
   if (mode === "browser") return false;
   if (process.env.SSH_CONNECTION || process.env.SSH_TTY || process.env.SSH_CLIENT) return true;
@@ -1146,15 +1121,17 @@ function openLink(url, what) {
   say(`↗ ${what} OPENED`, C.cyan, 1500);
 }
 
+// Both clipboards: the screen you look at (OSC 52, which also reaches a
+// machine attached with herdr --remote) and this machine's, for terminals
+// that ignore OSC 52.
 function copy(text) {
-  if (!noLocalBrowser()) {
-    const cmds = process.platform === "darwin" ? [["pbcopy"]] : [["wl-copy"], ["xclip", "-selection", "clipboard"], ["xsel", "-b", "-i"]];
-    for (const [cmd, ...args] of cmds) {
-      const r = require("node:child_process").spawnSync(cmd, args, { input: text });
-      if (!r.error && r.status === 0) return;
-    }
-  }
   osc52(text);
+  if (noLocalBrowser()) return;
+  const cmds = process.platform === "darwin" ? [["pbcopy"]] : [["wl-copy"], ["xclip", "-selection", "clipboard"], ["xsel", "-b", "-i"]];
+  for (const [cmd, ...args] of cmds) {
+    const r = require("node:child_process").spawnSync(cmd, args, { input: text });
+    if (!r.error && r.status === 0) return;
+  }
 }
 
 function quit(after) {
@@ -1463,8 +1440,6 @@ function onKey(k) {
       return;
     case "n":
       return openTask("");
-    case "m":
-      return toggleRemoteScreen();
     case ",":
       return editConfig();
     case "s":

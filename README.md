@@ -250,8 +250,25 @@ draws the board.
   remote, when the board runs over SSH or on a machine without a display.
   The detection reads the SSH environment of the Herdr server; if your
   remote server was started outside SSH, set `"openLinks": "copy"` there.
-- With `--remote`, Herdr uses your local key bindings unless you pass
-  `--remote-keybindings server`; if `prefix+d` does nothing, use that.
+- With `--remote`, Herdr uses the key bindings of the machine you sit at.
+  That makes a per-screen setup possible: on the machine you attach from,
+  bind the `open-remote` action instead of `open`. It opens the same board
+  with the `remote` settings (links copied to that screen's clipboard,
+  plain-text icons for terminals without herdr-radar's font), and the board
+  shows `⇄ REMOTE SCREEN`:
+
+  ```toml
+  # config.toml on the machine you attach from
+  # (Windows: %APPDATA%\herdr\config.toml)
+  [[keys.command]]
+  key = "prefix+d"
+  type = "plugin_action"
+  command = "tferreira.herdr-pr-ops.open-remote"
+  description = "PR//OPS"
+  ```
+
+  Change those settings with `"remote": { "openLinks": "copy", "glyphs": "text" }`
+  in the server's config.
 
 ## Rules worth knowing
 

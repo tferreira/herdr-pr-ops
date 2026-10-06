@@ -10,6 +10,9 @@ board, keys and config can still change between minor versions.
   board runs over SSH or without a display, and `o` / `f` copy the link
   there instead of opening a browser on the wrong machine. `openLinks`
   config (`auto`, `browser`, `copy`).
+- `open-remote` action for screens attached with `herdr --remote`: bind it
+  in that machine's config.toml to get links copied to its clipboard and
+  plain-text icons, while the server machine keeps the normal board.
 
 ## 0.4.3 - 2026-10-06
 

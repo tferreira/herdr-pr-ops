@@ -241,37 +241,39 @@ name or a `sentryProjects` key reads as a Sentry short ID. Each tracker uses
 
 ## Remote machines (`herdr --remote`)
 
-Plugins run where the Herdr server runs, so install PR//OPS (and Node, `gh`,
-your clones and your agent) on the remote machine; your local terminal only
-draws the board.
+Install PR//OPS only on the machine that runs the Herdr server, with Node,
+`gh`, your clones and your agent. The machine you attach from needs no
+plugin: it only draws the board.
 
-- `y` copies through the terminal (OSC 52), so the URL lands on the
-  clipboard of the machine you are sitting at. Herdr passes it through.
-- `o` / `f` copy the link the same way instead of opening a browser on the
-  remote, when the board runs over SSH or on a machine without a display.
-  The detection reads the SSH environment of the Herdr server; if your
-  remote server was started outside SSH, set `"openLinks": "copy"` there.
-- The board cannot tell which screen is looking at it, so it has a screen
-  mode: press `m` on the machine you attach from to switch to **remote
-  screen** (links copied to that screen's clipboard, plain-text icons for
-  terminals without herdr-radar's font; the header shows `⇄ REMOTE SCREEN`),
-  and `m` again when you are back at the server machine. It is remembered.
-- Or, to never press `m`: with `--remote`, Herdr uses the key bindings of
-  the machine you sit at, so binding the `open-remote` action there opens
-  the board in remote-screen mode every time:
+It does need one key binding. With `--remote`, Herdr uses the key bindings
+of the machine you sit at, and the install only added `prefix+d` on the
+server. Bind it on the attaching machine to `open-remote`: the same board,
+but links (`o`, `f`, `y`) go to that machine's clipboard instead of opening a
+browser on the server, and icons are plain text for terminals without
+herdr-radar's font. The header shows `⇄ REMOTE SCREEN`.
 
-  ```toml
-  # config.toml on the machine you attach from
-  # (Windows: %APPDATA%\herdr\config.toml)
-  [[keys.command]]
-  key = "prefix+d"
-  type = "plugin_action"
-  command = "tferreira.herdr-pr-ops.open-remote"
-  description = "PR//OPS"
-  ```
+Windows (PowerShell), once:
 
-- Change what remote-screen mode does with
-  `"remote": { "openLinks": "copy", "glyphs": "text" }` in the config.
+```powershell
+Add-Content "$env:APPDATA\herdr\config.toml" "`n[[keys.command]]`nkey = `"prefix+d`"`ntype = `"plugin_action`"`ncommand = `"tferreira.herdr-pr-ops.open-remote`"`ndescription = `"PR//OPS`""
+```
+
+macOS or Linux:
+
+```sh
+printf '\n[[keys.command]]\nkey = "prefix+d"\ntype = "plugin_action"\ncommand = "tferreira.herdr-pr-ops.open-remote"\ndescription = "PR//OPS"\n' >> "${XDG_CONFIG_HOME:-$HOME/.config}/herdr/config.toml"
+```
+
+Then reattach (or use Herdr's reload-config action). Sitting at the server
+machine, `prefix+d` keeps opening the normal board.
+
+- No binding on the attaching machine? `herdr --remote <host>
+  --remote-keybindings server` uses the server's `prefix+d`, and `m` on the
+  board switches to remote-screen mode (remembered until you press it again).
+- Over plain SSH or on a machine without a display, links are copied
+  automatically; `"openLinks": "copy"` forces it.
+- `"remote": { "openLinks": "copy", "glyphs": "text" }` changes what
+  remote-screen mode does.
 
 ## Rules worth knowing
 

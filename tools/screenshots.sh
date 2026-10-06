@@ -1,7 +1,7 @@
 #!/bin/sh
 # Regenerate the README images from the demo board (fake data, no GitHub).
 # Needs Google Chrome, ffmpeg, and MesloLGM Nerd Font 3.5 or later for the
-# icons.
+# icons: installed, or a .ttf file given as NERD_FONT=/path/to/font.ttf.
 set -eu
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)

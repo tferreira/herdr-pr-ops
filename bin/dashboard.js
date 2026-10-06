@@ -681,8 +681,7 @@ function overlayHelp(out, W, H) {
     ["r", "review: new agent pane in a PR worktree (prompts.review)"],
     ["c", "re-check: were my comments addressed? reuses the review agent"],
     ["d", "deploy: prompts.deploy (approved, CI green, no conflict)"],
-    ["space", "mark for a multi-deploy (ctrl+click too); d ships all"],
-    ["click", "select a card or a tab; wheel scrolls"],
+    ["space", "mark for a multi-deploy (alt+click too); d ships all"],
     ["enter", "jump to the PR's agent pane"],
     ["o / f", "open PR / files changed in the browser"],
     ["y", "copy PR url"],
@@ -896,9 +895,13 @@ function quit(after) {
   process.exit(0);
 }
 
-// SGR mouse: click selects a card or a tab, ctrl+click marks for deploy,
-// the wheel moves through the column.
+// SGR mouse. Herdr's popups only forward alt+click (plain clicks, ctrl+click
+// and the wheel stay with Herdr), so alt+click is the gesture: it selects a
+// card and marks it for deploy. Plain click (select) and the wheel are
+// handled too, for when they do arrive.
+const DEBUG_INPUT = !DEMO && U.config().debugInput;
 function onMouse(k) {
+  if (DEBUG_INPUT) U.log("mouse", JSON.stringify(k));
   const m = k.match(/^\x1b\[<(\d+);(\d+);(\d+)([Mm])$/);
   if (!m || m[4] !== "M" || task || help) return;
   const [b, x, y] = [Number(m[1]), Number(m[2]), Number(m[3])];
@@ -914,10 +917,11 @@ function onMouse(k) {
   if (!c) return;
   const pr = data.prs.find((p) => p.url === c.url);
   ui.sel[ui.tab] = { url: c.url, col: c.col, pos: 0 };
-  if (b & 16 && pr) toggleMark(pr);
+  if (b & (16 | 8) && pr) toggleMark(pr);
 }
 
 function onKey(k) {
+  if (DEBUG_INPUT && k.startsWith("\x1b") && !k.startsWith("\x1b[<")) U.log("key", JSON.stringify(k));
   if (k.startsWith("\x1b[<")) return onMouse(k);
   if (task) return taskKey(k);
   if (filterMode) {

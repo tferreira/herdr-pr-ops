@@ -3,6 +3,15 @@
 Versions follow [semantic versioning](https://semver.org). Before 1.0 the
 board, keys and config can still change between minor versions.
 
+## 0.4.3 - 2026-10-06
+
+### Fixed
+- An agent in a main clone was matched to the PR of whatever branch that
+  clone still had checked out. Claude Code's per-entry metadata (`gitBranch`,
+  `cwd`, ...) no longer counts as evidence, the checkout's branch no longer
+  counts for merged or closed PRs, and titles like "PR 1617" count.
+  `AGENTLINK_DEBUG=1` prints the scores.
+
 ## 0.4.2 - 2026-10-06
 
 ### Fixed

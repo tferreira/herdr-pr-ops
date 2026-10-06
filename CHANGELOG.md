@@ -3,6 +3,13 @@
 Versions follow [semantic versioning](https://semver.org). Before 1.0 the
 board, keys and config can still change between minor versions.
 
+## 0.4.1 - 2026-10-06
+
+### Fixed
+- A task's agent could still leave In progress for an unrelated PR its
+  investigation mentioned. Agents started with `n` now stay on their task
+  until a PR exists for the task's own branch.
+
 ## 0.4.0 - 2026-10-06
 
 ### Added

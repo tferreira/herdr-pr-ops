@@ -79,26 +79,22 @@ command = "tferreira.herdr-pr-ops.open"
 description = "PR//OPS"
 ```
 
-Point it at your work: press `,` on the board (or edit
-`$(herdr plugin config-dir tferreira.herdr-pr-ops)/config.json`). The usual
-first settings:
+Press `prefix+d`. The first time, a setup screen finds what it can by itself
+and you mostly press `enter`:
 
-```json
-{
-  "orgs": ["acme"],
-  "repoRoots": ["~/work"],
-  "youtrackUrl": "https://acme.youtrack.cloud",
-  "prompts": { "review": "/my-review-skill {url}" }
-}
-```
+- **orgs:** the owners of PRs you were involved in lately; the busiest one is
+  ticked, personal and side orgs are not;
+- **clones:** folders under `~` holding clones from those orgs, so agents
+  start in the right repo;
+- **tracker:** a Jira, Linear or YouTrack URL your coding agent is already
+  connected to (its MCP config), or one you type.
 
-- `orgs` keeps other orgs' and personal PRs off the board.
-- `repoRoots` is where your clones live, so agents start in the right repo.
-- A tracker URL (`jiraUrl`, `linearUrl` or `youtrackUrl`) makes bare
-  `PROJ-123` IDs resolve; see [Trackers](#trackers).
-- `prompts` only if you have your own skills; the defaults work without.
+It only reads `gh`, your folders and your agent config files, and writes the
+plugin's `config.json`. Change anything later with `,` on the board, or run
+the setup again with `herdr plugin action invoke tferreira.herdr-pr-ops.setup`.
+Every setting is in [Settings](#settings).
 
-Every other setting is in [Settings](#settings).
+<img src="assets/setup.png" alt="First-run setup" width="100%">
 
 Want to look around first? `herdr plugin action invoke tferreira.herdr-pr-ops.demo`
 opens the board with fake data; nothing is fetched or launched.

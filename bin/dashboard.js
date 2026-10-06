@@ -487,6 +487,10 @@ function render() {
     { row: 2, x: -2, runs: [...agentSummary(), [clock, { fg: C.mute }]] },
   ];
   for (const l of header.render(W, Date.now(), text)) out.push(line(l));
+  if (setup) {
+    renderSetup(out, W, H, line);
+    return flush(out);
+  }
 
   // tabs ──
   let tabs = S(" ", { bg: C.bg });
@@ -614,8 +618,11 @@ function render() {
 
   if (help) overlayHelp(out, W, H);
   if (task) overlayTask(out, W, H);
+  flush(out);
+}
 
-  // Rewrite only the lines that changed: the header animates constantly.
+// Rewrite only the lines that changed: the header animates constantly.
+function flush(out) {
   const lines = out.map((l) => l + `${ESC}0m`);
   if (SNAP) return process.stdout.write(lines.join("\n"));
   let buf = "";
@@ -959,7 +966,221 @@ function onMouse(k) {
   if (b & (16 | 8) && pr) toggleMark(pr);
 }
 
+// ── first-run setup ────────────────────────────────────────────────────────
+// Shown on the first open (no config.json yet) and by the setup action. The
+// detection (lib/setup.js) runs in a child process so the screen animates.
+const Setup = require("../lib/setup");
+let setup = null; // { phase, result, cursor, url, tracker, error }
+
+function demoDetection() {
+  return {
+    login: "octocat",
+    orgs: [
+      { name: "acme", count: 42, checked: true },
+      { name: "acme-labs", count: 6, checked: false },
+      { name: "octocat", count: 3, personal: true, checked: false },
+    ],
+    clones: [
+      { dir: "~/work", count: 23, matching: 23, checked: true },
+      { dir: "~/oss", count: 9, matching: 0, checked: false },
+    ],
+    trackers: [{ kind: "jira", url: "https://acme.atlassian.net", source: "~/.claude.json" }],
+    keys: ["PROJ", "OPS"],
+  };
+}
+
+function startSetup() {
+  setup = { phase: "scanning", result: null, cursor: 0, url: "", tracker: 0, started: Date.now() };
+  if (DEMO && SNAP) return readySetup(demoDetection());
+  if (DEMO) return setTimeout(() => readySetup(demoDetection()), 1600);
+  execFile(process.execPath, [path.join(__dirname, "..", "lib", "setup.js"), "--detect"], { encoding: "utf8", timeout: 60000, env: process.env }, (err, out) => {
+    if (err) {
+      setup.phase = "error";
+      setup.error = err.message.split("\n")[0];
+      return;
+    }
+    readySetup(JSON.parse(out));
+  });
+}
+
+function readySetup(result) {
+  setup.result = result;
+  setup.phase = result.ghError ? "error" : "ready";
+  setup.error = result.ghError;
+  setup.tracker = result.trackers.length ? 0 : -1; // -1: none
+}
+
+// Selectable rows, top to bottom.
+function setupItems() {
+  const r = setup.result;
+  return [
+    ...r.orgs.map((o, i) => ({ type: "org", i })),
+    ...r.clones.map((c, i) => ({ type: "clone", i })),
+    ...r.trackers.map((t, i) => ({ type: "tracker", i })),
+    { type: "tracker", i: -1 },
+    { type: "url" },
+  ];
+}
+
+function saveSetup() {
+  const r = setup.result;
+  const typed = setup.url.trim() ? Setup.trackerFromUrl(setup.url) : null;
+  if (setup.url.trim() && !typed) return say("THAT URL IS NOT A JIRA, LINEAR OR YOUTRACK ADDRESS", C.red);
+  const changes = Setup.toConfig({
+    orgs: r.orgs.filter((o) => o.checked).map((o) => o.name),
+    clones: r.clones.filter((c) => c.checked).map((c) => c.dir),
+    tracker: typed || (setup.tracker >= 0 ? r.trackers[setup.tracker] : null),
+  });
+  if (DEMO) {
+    setup = null;
+    return say(`DEMO MODE · WOULD SAVE ${Object.keys(changes).join(", ") || "NOTHING"}`, C.violet, 5000);
+  }
+  const cfg = { ...U.readJSON(U.paths.config, {}), ...changes };
+  fs.mkdirSync(path.dirname(U.paths.config), { recursive: true });
+  U.writeJSON(U.paths.config, cfg);
+  setup = null;
+  refresh(true);
+  say("◆ CALIBRATED · SCANNING YOUR PRS · , EDITS SETTINGS LATER", C.green, 6000);
+}
+
+function skipSetup() {
+  if (!DEMO && !fs.existsSync(U.paths.config)) {
+    fs.mkdirSync(path.dirname(U.paths.config), { recursive: true });
+    U.writeJSON(U.paths.config, {});
+  }
+  setup = null;
+  say("SETUP SKIPPED · , EDITS SETTINGS · THE SETUP ACTION REOPENS THIS", C.violet, 6000);
+}
+
+function setupKey(k) {
+  if (setup.phase !== "ready") {
+    if (k === "\x1b" || k === "q" || k === "\x03") return setup.phase === "error" ? quit() : skipSetup();
+    return;
+  }
+  const items = setupItems();
+  const it = items[setup.cursor];
+  const r = setup.result;
+  if (it.type === "url" && k.length === 1 && k >= " ") {
+    setup.url += k;
+    return;
+  }
+  if (it.type === "url" && k === "\x7f") {
+    setup.url = setup.url.slice(0, -1);
+    return;
+  }
+  switch (k) {
+    case "\x1b[A":
+    case "k":
+      setup.cursor = Math.max(0, setup.cursor - 1);
+      return;
+    case "\x1b[B":
+    case "j":
+    case "\t":
+      setup.cursor = Math.min(items.length - 1, setup.cursor + 1);
+      return;
+    case " ":
+      if (it.type === "org") r.orgs[it.i].checked = !r.orgs[it.i].checked;
+      else if (it.type === "clone") r.clones[it.i].checked = !r.clones[it.i].checked;
+      else if (it.type === "tracker") {
+        setup.tracker = it.i;
+        setup.url = "";
+      }
+      return;
+    case "\r":
+      return saveSetup();
+    case "\x1b":
+    case "\x03":
+      return skipSetup();
+  }
+}
+
+function renderSetup(out, W, H, line) {
+  const base = S("", { bg: C.bg });
+  const w = Math.min(W - 4, 96);
+  const x = Math.max(0, Math.floor((W - w) / 2));
+  const pad = S(" ".repeat(x), { bg: C.bg });
+  const rows = [];
+  const push = (s = "") => rows.push(line(pad + s));
+  const label = (s) => S(s.padEnd(12), { fg: C.cyan, bg: C.bg, bold: true });
+  const indent = S(" ".repeat(12), { bg: C.bg });
+
+  push();
+  push(gradient("◢◤ FIRST RUN · CALIBRATING", C.cyan, C.magenta, { bg: C.bg, bold: true }));
+  push(S("─".repeat(w), { fg: C.line, bg: C.bg }));
+  push();
+
+  if (setup.phase === "scanning") {
+    const t = Date.now() - setup.started;
+    const steps = ["GITHUB ACCOUNT", "YOUR PULL REQUESTS", "LOCAL CLONES", "AGENT CONFIGS"];
+    steps.forEach((st, i) => {
+      const on = Math.floor(t / 450) >= i;
+      push(indent + S(on ? `${SWEEP[(tick + i) % 4]} ${st}` : `  ${st}`, { fg: on ? C.cyan : C.dim, bg: C.bg, bold: on }));
+    });
+  } else if (setup.phase === "error") {
+    push(label("GITHUB") + S(`✕ ${setup.error}`, { fg: C.red, bg: C.bg, bold: true }));
+    push();
+    push(indent + S("PR//OPS reads GitHub through the gh CLI. In a pane, run:", { fg: C.text, bg: C.bg }));
+    push(indent + S("  gh auth login", { fg: C.white, bg: C.bg, bold: true }));
+    push(indent + S("then open the board again.", { fg: C.text, bg: C.bg }));
+  } else {
+    const r = setup.result;
+    const items = setupItems();
+    const cur = items[setup.cursor];
+    const mark = (type, i) => cur.type === type && cur.i === i;
+    const pointer = (on) => S(on ? "▶ " : "  ", { fg: C.cyan, bg: C.bg, bold: true });
+    const box = (checked) => S(checked ? "[x] " : "[ ] ", { fg: checked ? C.green : C.dim, bg: C.bg, bold: checked });
+    const radio = (on) => S(on ? "(•) " : "( ) ", { fg: on ? C.green : C.dim, bg: C.bg, bold: on });
+
+    push(label("GITHUB") + S(`✓ @${r.login}`, { fg: C.green, bg: C.bg, bold: true }) + S("  gh is logged in", { fg: C.mute, bg: C.bg }));
+    push();
+    push(label("ORGS") + S("whose pull requests go on the board? none ticked: all", { fg: C.mute, bg: C.bg }));
+    r.orgs.forEach((o, i) => {
+      const note = `${o.count} recent PR${o.count === 1 ? "" : "s"}${o.personal ? " · personal" : ""}`;
+      push(indent + pointer(mark("org", i)) + box(o.checked) + S(o.name.padEnd(22), { fg: C.white, bg: C.bg, bold: mark("org", i) }) + S(note, { fg: C.mute, bg: C.bg }));
+    });
+    push();
+    push(label("CLONES") + S("where your repos live, so agents start in the right one", { fg: C.mute, bg: C.bg }));
+    if (!r.clones.length) push(indent + S("  none found under ~ · agents will start in ~ and work through gh", { fg: C.dim, bg: C.bg }));
+    r.clones.forEach((c, i) => {
+      const note = c.matching ? `${c.matching} repo${c.matching === 1 ? "" : "s"} from your orgs` : `${c.count} other repos`;
+      push(indent + pointer(mark("clone", i)) + box(c.checked) + S(c.dir.padEnd(22), { fg: C.white, bg: C.bg, bold: mark("clone", i) }) + S(note, { fg: C.mute, bg: C.bg }));
+    });
+    push();
+    const keys = r.keys.length ? `tickets like ${r.keys.slice(0, 3).map((k) => `${k}-123`).join(", ")} in your PR titles` : "for the n key";
+    push(label("TRACKER") + S(keys, { fg: C.mute, bg: C.bg }));
+    r.trackers.forEach((t, i) => {
+      push(indent + pointer(mark("tracker", i)) + radio(setup.tracker === i && !setup.url) + S(`${t.kind.padEnd(9)} ${t.url}`, { fg: C.white, bg: C.bg, bold: mark("tracker", i) }) + S(`  found in ${t.source}`, { fg: C.mute, bg: C.bg }));
+    });
+    push(indent + pointer(mark("tracker", -1)) + radio(setup.tracker === -1 && !setup.url) + S("none / GitHub Issues only", { fg: C.white, bg: C.bg, bold: mark("tracker", -1) }));
+    const urlOn = cur.type === "url";
+    const typed = setup.url ? Setup.trackerFromUrl(setup.url) : null;
+    push(
+      indent + pointer(urlOn) + S("or type its URL: ", { fg: C.mute, bg: C.bg }) +
+        S(setup.url + (urlOn && tick % 8 < 4 ? "▏" : " "), { fg: C.white, bg: C.bg, bold: true }) +
+        (setup.url ? S(typed ? `  ✓ ${typed.kind}` : "  ? not recognised", { fg: typed ? C.green : C.amber, bg: C.bg }) : ""),
+    );
+    push();
+    push(indent + S("prompts use plain instructions; point them at your own skills later with ,", { fg: C.dim, bg: C.bg, italic: true }));
+  }
+
+  const footH = 2;
+  const room = Math.max(0, H - out.length - footH);
+  out.push(...rows.slice(0, room));
+  while (out.length < H - footH) out.push(line(""));
+  out.push(line(S("─".repeat(W), { fg: C.line, bg: C.bg })));
+  const key = (k, l) => S(k, { fg: C.bg, bg: C.cyan, bold: true }) + S(` ${l}  `, { fg: C.text, bg: C.bg });
+  let bar = S(" ", { bg: C.bg });
+  if (setup.phase === "ready") bar += key(" ↵ ", "SAVE AND LAUNCH") + key(" ↑↓ ", "MOVE") + key(" ␣ ", "TICK / CHOOSE") + key(" esc ", "SKIP");
+  else if (setup.phase === "error") bar += key(" esc ", "CLOSE");
+  else bar += key(" esc ", "SKIP");
+  let t = "";
+  if (toast && Date.now() < toast.until) t = S(` ${toast.text} `, { fg: C.bg, bg: toast.color, bold: true });
+  out.push(line(bar + S(" ".repeat(Math.max(1, W - width(bar) - width(t))), { bg: C.bg }) + t));
+  void base;
+}
+
 function onKey(k) {
+  if (setup) return setupKey(k);
   if (DEBUG_INPUT && k.startsWith("\x1b") && !k.startsWith("\x1b[<")) U.log("key", JSON.stringify(k));
   if (k.startsWith("\x1b[<")) return onMouse(k);
   if (task) return taskKey(k);
@@ -1099,6 +1320,7 @@ function main() {
   if (SNAP) {
     if (SNAP[1]) ui.tab = SNAP[1];
     if (SNAP[2] !== undefined) openTask(SNAP[2]);
+    if (process.argv.includes("--setup")) startSetup();
     // SNAP_KEYS='["\u001b[C","\r"]': replay keys before the frame (tests).
     for (const k of JSON.parse(process.env.SNAP_KEYS || "[]")) onKey(k);
     pollFiles();
@@ -1165,6 +1387,14 @@ function main() {
   for (const [url, at] of Object.entries(launches)) {
     if (at.state === "error" && Date.now() - Date.parse(at.at) > 600000) delete launches[url];
   }
+
+  // First run (no config yet) or the setup action: the calibration screen.
+  if (!DEMO && (!fs.existsSync(U.paths.config) || fs.existsSync(U.paths.pendingSetup))) {
+    try {
+      fs.unlinkSync(U.paths.pendingSetup);
+    } catch {}
+    startSetup();
+  } else if (DEMO && process.argv.includes("--setup")) startSetup();
 
   const pending = U.readJSON(U.paths.pendingTask, null);
   if (pending) {

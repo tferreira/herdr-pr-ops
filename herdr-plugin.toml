@@ -36,6 +36,12 @@ description = "Open the pull request dashboard."
 command = ["node", "bin/open.js"]
 
 [[actions]]
+id = "setup"
+title = "Run PR//OPS setup"
+description = "Detect your orgs, clone folders and tracker again, and save them to config.json."
+command = ["node", "bin/open.js", "--setup"]
+
+[[actions]]
 id = "refresh"
 title = "Refresh pull requests"
 description = "Ask the poller to scan GitHub now."

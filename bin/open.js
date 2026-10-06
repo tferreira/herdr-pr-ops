@@ -5,6 +5,7 @@
 // open.js --refresh  ask the poller to scan now
 // open.js --daemon   make sure the poller runs (startup hook)
 // open.js --demo     open the dashboard with fake data
+// open.js --setup    open the dashboard on the first-run setup screen
 // open.js --task     open the dashboard on the new-task box, prefilled with
 //                    the ctrl+clicked YouTrack / Sentry link if there is one
 
@@ -20,6 +21,7 @@ if (flag === "--refresh") {
     if (pid) process.kill(pid, "SIGUSR2");
   }, 200);
 } else if (flag !== "--daemon") {
+  if (flag === "--setup") writeJSON(paths.pendingSetup, { at: Date.now() });
   if (flag === "--task") writeJSON(paths.pendingTask, { input: process.env.HERDR_PLUGIN_CLICKED_URL || "" });
   try {
     herdr(["plugin", "pane", "open", "--plugin", PLUGIN_ID, "--entrypoint", flag === "--demo" ? "demo" : "board"]);

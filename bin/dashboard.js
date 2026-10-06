@@ -34,6 +34,7 @@ const LANE_COLORS = [C.cyan, C.magenta, C.violet, C.green, C.amber, C.blue, "#ff
 
 const COLUMNS = {
   mine: [
+    { title: "IN PROGRESS", color: C.violet, glyph: "◇" },
     { title: "NEEDS YOU", color: C.red, glyph: "◢" },
     { title: "IN REVIEW", color: C.cyan, glyph: "◈" },
     { title: "READY TO SHIP", color: C.green, glyph: "◆" },
@@ -100,13 +101,13 @@ const say = (text, color = C.cyan, ms = 3200) => (toast = { text, color, until: 
 // ── data ───────────────────────────────────────────────────────────────────
 function visiblePrs(tab) {
   const q = filter.toLowerCase();
-  return data.prs.filter((p) => {
+  return [...data.prs, ...(tab === "mine" ? work : [])].filter((p) => {
     if (p.tab !== tab) return false;
     // Merged, closed or approved PRs stay only while an agent is on them.
     if (p.quiet && !agentsFor(p).length) return false;
     const snooze = ui.snoozed[p.url];
     if (snooze && snooze === p.updatedAt && !ui.showSnoozed) return false;
-    if (q && !`${p.repoName} ${p.number} ${p.title} ${p.author}`.toLowerCase().includes(q)) return false;
+    if (q && !`${p.repoName} ${p.number || p.ticket} ${p.title} ${p.author}`.toLowerCase().includes(q)) return false;
     return true;
   });
 }
@@ -121,7 +122,7 @@ function laneColor(repo) {
 function buildLanes(tab) {
   const byRepo = new Map();
   for (const p of visiblePrs(tab)) {
-    if (!byRepo.has(p.repoName)) byRepo.set(p.repoName, [[], [], []]);
+    if (!byRepo.has(p.repoName)) byRepo.set(p.repoName, COLUMNS[tab].map(() => []));
     byRepo.get(p.repoName)[p.col].push(p);
   }
   const lanes = [...byRepo.entries()].map(([repo, cols]) => {
@@ -143,13 +144,14 @@ function column(lanes, c) {
 function selected(lanes) {
   const s = ui.sel[ui.tab];
   if (s) {
-    for (let c = 0; c < 3; c++) {
+    for (let c = 0; c < COLUMNS[ui.tab].length; c++) {
       const hit = column(lanes, c).find((e) => e.pr.url === s.url);
       if (hit) return { ...hit, col: c };
     }
   }
   // Selection vanished: stay in the same column if possible.
-  const order = s ? [s.col, 0, 1, 2] : [0, 1, 2];
+  const all = COLUMNS[ui.tab].map((_, i) => i);
+  const order = s ? [s.col, ...all] : all;
   for (const c of order) {
     const col = column(lanes, c);
     if (col.length) {
@@ -177,7 +179,7 @@ function move(dx, dy) {
     select(next, cur.col, lanes);
     return;
   }
-  for (let c = cur.col + dx; c >= 0 && c < 3; c += dx) {
+  for (let c = cur.col + dx; c >= 0 && c < COLUMNS[ui.tab].length; c += dx) {
     const col = column(lanes, c);
     if (!col.length) continue;
     // Same lane, same row if possible; otherwise the nearest lane.
@@ -201,13 +203,69 @@ function move(dx, dy) {
 
 // ── agents & launches ──────────────────────────────────────────────────────
 const { linkAgents } = require("../lib/agentlink");
+const { checkoutInfo } = require("../lib/gitinfo");
 let links = new Map(); // pr url -> [agent]
+let work = []; // in-progress cards: agents on a branch with no PR yet
+
+const DEFAULT_BRANCHES = new Set(["main", "master", "develop", "dev", "trunk"]);
+
+function workItem(a, m) {
+  return {
+    url: `work:${a.pane_id}`,
+    work: true,
+    agentPane: a.pane_id,
+    ticket: m.id,
+    ticketLabel: m.label || null,
+    ticketUrl: m.url || null,
+    title: a.terminal_title_stripped || m.title || m.branch || m.id,
+    repo: m.repo || `?/${m.repoName}`,
+    repoName: m.repoName || "?",
+    headRef: m.branch || "",
+    author: data.me,
+    tab: "mine",
+    col: 0,
+    updatedAt: null,
+  };
+}
+
+// Agents not on any PR: tasks started with n, and agents working on a
+// feature branch (not main/master) of one of your orgs' repos that has no
+// PR on the board yet. Agents elsewhere (home, other repos) are left out.
+function buildWork() {
+  const linked = new Set();
+  for (const list of links.values()) for (const a of list) linked.add(a.pane_id);
+  const cfg = U.config();
+  const orgs = (cfg.orgs || []).map((o) => o.toLowerCase());
+  const prBranches = new Set(data.prs.map((p) => `${p.repo.toLowerCase()}#${p.headRef}`));
+  const out = [];
+  const taken = new Set();
+  for (const [key, v] of Object.entries(agentMap)) {
+    if (!key.startsWith("task:") || !v.task || !agents.has(v.task) || linked.has(v.task)) continue;
+    const m = v.meta || { id: key.slice(5) };
+    out.push(workItem(agents.get(v.task), m));
+    taken.add(v.task);
+  }
+  for (const a of agents.values()) {
+    if (linked.has(a.pane_id) || taken.has(a.pane_id)) continue;
+    const info = checkoutInfo(a.foreground_cwd || a.cwd);
+    if (!info || !info.repo || !info.branch || DEFAULT_BRANCHES.has(info.branch)) continue;
+    if (orgs.length && !orgs.includes(info.repo.split("/")[0].toLowerCase())) continue;
+    if (prBranches.has(`${info.repo.toLowerCase()}#${info.branch}`)) continue;
+    const key = (info.branch.match(/^([A-Za-z][A-Za-z0-9_]*-[0-9][0-9A-Za-z]*)/) || [])[1];
+    out.push(workItem(a, { id: key ? key.toUpperCase() : info.branch, repo: info.repo, repoName: info.repo.split("/")[1], branch: info.branch }));
+  }
+  return out;
+}
 
 function pollAgents() {
   if (DEMO) {
     agents = demo.agents();
     agentMap = demo.agentMap();
     links = linkAgents(agents, data.prs, agentMap);
+    work = demo.work().map((w) => {
+      agents.set(w.pane, { pane_id: w.pane, agent: "claude", agent_status: w.status, terminal_title_stripped: w.title });
+      return workItem(agents.get(w.pane), w);
+    });
     return;
   }
   agentMap = U.readJSON(U.paths.agents, {});
@@ -217,6 +275,7 @@ function pollAgents() {
       const list = JSON.parse(out).result.agents || [];
       agents = new Map(list.map((a) => [a.pane_id, a]));
       links = linkAgents(agents, data.prs, agentMap);
+      work = buildWork();
     } catch {}
   });
 }
@@ -226,6 +285,7 @@ const URGENCY = { blocked: 0, done: 1, working: 2, idle: 3, unknown: 4 };
 // Live agents on a PR, most urgent first. See lib/agentlink.js for how an
 // agent is matched to a PR.
 function agentsFor(pr) {
+  if (pr.work) return agents.has(pr.agentPane) ? [agents.get(pr.agentPane)] : [];
   return (links.get(pr.url) || []).slice().sort((a, b) => (URGENCY[a.agent_status] ?? 9) - (URGENCY[b.agent_status] ?? 9));
 }
 
@@ -343,7 +403,7 @@ function deployMarked() {
 // Header line: what the agents on board PRs are doing.
 function agentSummary() {
   const seen = new Map();
-  for (const pr of data.prs) for (const a of agentsFor(pr)) seen.set(a.pane_id, a);
+  for (const pr of [...data.prs, ...work]) for (const a of agentsFor(pr)) seen.set(a.pane_id, a);
   if (!seen.size) return [];
   const list = [...seen.values()];
   const runs = [];
@@ -372,6 +432,12 @@ const pulse = (a, b, period = 1200) => mix(a, b, (Math.sin((Date.now() / period)
 // ── chips ──────────────────────────────────────────────────────────────────
 function chips(pr, bg) {
   const out = [];
+  if (pr.work) {
+    if (pr.ticketLabel) out.push(S(pr.ticketLabel.toUpperCase(), { fg: C.violet, bg, bold: true }));
+    if (pr.headRef) out.push(S(`⎇ ${pr.headRef}`, { fg: C.mute, bg }));
+    out.push(S("NO PR YET", { fg: C.dim, bg }));
+    return out;
+  }
   const L = launches[pr.url];
   if (L && L.state === "starting") out.push(S(`${SWEEP[tick % 4]} ${L.msg || "launching"}`.toUpperCase(), { fg: pulse(C.cyan, C.violet, 800), bg, bold: true }));
   else if (L && L.state === "error") out.push(S("✕ LAUNCH FAILED", { fg: C.red, bg, bold: true }));
@@ -417,15 +483,16 @@ function card(pr, w, isSel, laneCol) {
   const font = glyphs().done !== "✓";
   const merged = pr.quiet && pr.quiet.kind === "merged";
   const prIcon = merged ? (font ? "\uf419" : "⛙") : draft ? (font ? "\uf4dd" : "◌") : font ? "\uf407" : "●";
-  const num =
-    S(isSel ? "▶ " : "", { fg: C.white, bg, bold: true }) +
+  const num = pr.work
+    ? S(isSel ? "▶ " : "", { fg: C.white, bg, bold: true }) +
+      S(`◇ ${pr.ticket.length > 18 ? pr.ticket.slice(0, 17) + "…" : pr.ticket}`, { fg: isSel ? C.white : C.violet, bg, bold: true })
+    : S(isSel ? "▶ " : "", { fg: C.white, bg, bold: true }) +
     (mark >= 0 ? S(`☑${mark + 1} `, { fg: C.magenta, bg, bold: true }) : "") +
     S(prIcon + " ", { fg: merged ? "#a371f7" : draft || pr.quiet ? C.mute : C.green, bg, bold: true }) +
     S(`#${pr.number}`, { fg: isSel ? C.white : draft ? C.mute : laneCol, bg, bold: true });
   const badge = agentBadge(pr, bg);
-  const meta =
-    (badge ? badge + S(" · ", { fg: C.mute, bg }) : "") +
-    S(`${pr.tab === "review" && !badge ? pr.author + " · " : ""}${ago(pr.updatedAt)}`, { fg: C.mute, bg });
+  const tail = `${pr.tab === "review" && !badge ? pr.author + " · " : ""}${ago(pr.updatedAt)}`;
+  const meta = (badge || "") + (badge && tail ? S(" · ", { fg: C.mute, bg }) : "") + (tail ? S(tail, { fg: C.mute, bg }) : "");
   const fill = Math.max(1, w - 8 - width(num) - width(meta));
   const top = B(tl + h + " ") + num + B(" " + h.repeat(fill) + " ") + meta + B(" " + h + tr);
 
@@ -541,7 +608,7 @@ function render() {
 
   // column headers ──
   LANE_W = Math.min(24, Math.max(12, ...lanes.map((l) => l.repo.length + 3)));
-  const colW = Math.floor((W - LANE_W - 1) / 3);
+  const colW = Math.floor((W - LANE_W - 1) / COLUMNS[ui.tab].length);
   CARD_H = colW < 60 ? 4 : 3;
   let hdr = S(" ".repeat(LANE_W), { bg: C.bg });
   COLUMNS[ui.tab].forEach((c, i) => {
@@ -564,17 +631,22 @@ function render() {
   let selRange = [0, 0];
   lanes.forEach((lane, li) => {
     const rows = Math.max(1, ...lane.cols.map((c) => c.length));
-    const total = lane.cols.reduce((n, c) => n + c.length, 0);
+    const total = lane.cols.reduce((n, c) => n + c.filter((p) => !p.work).length, 0);
+    const wip = lane.cols.reduce((n, c) => n + c.filter((p) => p.work).length, 0);
     for (let r = 0; r < rows * CARD_H; r++) {
       const ci = Math.floor(r / CARD_H);
       const sub = r % CARD_H;
       let label;
       const bar = S("▍", { fg: lane.color, bg: C.bg });
       if (r === 0) label = bar + S(lane.repo.toUpperCase(), { fg: lane.color, bg: C.bg, bold: true });
-      else if (r === 1) label = bar + S(`${total} PR${total > 1 ? "S" : ""}`, { fg: C.dim, bg: C.bg });
+      else if (r === 1)
+        label =
+          bar +
+          (total ? S(`${total} PR${total > 1 ? "S" : ""}`, { fg: C.dim, bg: C.bg }) : "") +
+          (wip ? S(`${total ? " " : ""}◇${wip}`, { fg: C.violet, bg: C.bg }) : "");
       else label = bar;
       let s = fit(label, LANE_W - 1, base, true) + S(" ", { bg: C.bg });
-      for (let c = 0; c < 3; c++) {
+      for (let c = 0; c < COLUMNS[ui.tab].length; c++) {
         const pr = lane.cols[c][ci];
         if (!pr) {
           s += S(" ".repeat(colW), { bg: C.bg });
@@ -649,6 +721,7 @@ function flush(out) {
 // ("↵ r REVIEW") so the bar keeps a fixed layout and shows what enter does.
 function actionKeys(sel, key) {
   const pr = sel && sel.pr;
+  if (pr && pr.work) return key(" ↵ ", "JUMP") + key(" o ", pr.ticketUrl ? "TICKET" : "OPEN", !!pr.ticketUrl);
   const ag = pr && agentFor(pr);
   const act = pr && !ag ? enterAction(pr) : null;
   const enterIs = (kind) => act && act.kind === kind;
@@ -671,7 +744,20 @@ function footerLines(sel, W, base) {
   const line = (s) => fit(s, W, base);
   const rule = S("─".repeat(W), { fg: C.line, bg: C.bg });
   const lines = [rule];
-  if (sel) {
+  if (sel && sel.pr.work) {
+    const pr = sel.pr;
+    const ag = agentFor(pr);
+    lines.push(
+      line(
+        S(" ▶ ", { fg: C.cyan, bg: C.bg, bold: true }) +
+          S(`${pr.repo} · ${pr.ticket}`, { fg: C.white, bg: C.bg, bold: true }) +
+          S(pr.headRef ? `  ⎇ ${pr.headRef}` : "", { fg: C.mute, bg: C.bg }) +
+          (ag ? S(`  ⌁ agent ${ag.agent_status} in ${ag.pane_id}`, { fg: C.magenta, bg: C.bg }) : ""),
+      ),
+    );
+    lines.push(line(S("   " + pr.title, { fg: C.text, bg: C.bg })));
+    lines.push(line(S(`   in progress · no PR yet${pr.ticketUrl ? " · " + pr.ticketUrl : ""}`, { fg: C.mute, bg: C.bg })));
+  } else if (sel) {
     const pr = sel.pr;
     const ag = agentFor(pr);
     const L = launches[pr.url];
@@ -691,8 +777,9 @@ function footerLines(sel, W, base) {
       status = S(`   ${my}${pr.reason ? " · " + pr.reason : ""}`, { fg: C.mute, bg: C.bg });
     } else {
       const decision = (pr.reviewDecision || "no reviews").toLowerCase().replace("_", " ");
-      const text = pr.col === 0 ? pr.reason : `${decision} · CI ${pr.ci}${pr.reason ? " · " + pr.reason : ""}`;
-      status = S(`   ${text}`, { fg: pr.col === 0 ? C.amber : C.mute, bg: C.bg });
+      const needsMe = pr.col === 1 && !pr.quiet; // Mine: in progress, needs you, in review, ready
+      const text = needsMe ? pr.reason : `${decision} · CI ${pr.ci}${pr.reason ? " · " + pr.reason : ""}`;
+      status = S(`   ${text}`, { fg: needsMe ? C.amber : C.mute, bg: C.bg });
     }
     lines.push(line(status));
   } else {
@@ -705,9 +792,7 @@ function footerLines(sel, W, base) {
   const keys =
     S(" ", { bg: C.bg }) +
     actionKeys(sel, key) +
-    key(" o ", "OPEN") +
-    key(" f ", "FILES") +
-    key(" z ", "SNOOZE") +
+    (sel && sel.pr.work ? "" : key(" o ", "OPEN") + key(" f ", "FILES") + key(" z ", "SNOOZE")) +
     key(" / ", "FILTER") +
     key(" R ", "SCAN") +
     key(" n ", "TASK") +
@@ -891,6 +976,7 @@ function enterAction(pr) {
 }
 
 function canDeploy(pr) {
+  if (pr.work) return "no PR yet";
   if (pr.quiet) return pr.quiet.kind === "merged" ? "already merged" : pr.quiet.kind === "closed" ? "closed" : "not yours";
   if (pr.tab !== "mine") return "deploy is for your own PRs";
   if (pr.reviewDecision !== "APPROVED") return "not approved yet";
@@ -1268,6 +1354,25 @@ function onKey(k) {
       return quit();
   }
   if (!pr) return;
+  if (pr.work) {
+    if (k === "\r") {
+      const ag = agentFor(pr);
+      if (!ag) return;
+      if (DEMO) return say(`DEMO MODE · WOULD JUMP TO ${ag.pane_id}`, C.violet);
+      return quit(ag.pane_id);
+    }
+    if (k === "o" || k === "y") {
+      if (!pr.ticketUrl) return say("NO TICKET LINK FOR THIS WORK", C.amber);
+      if (k === "y") {
+        copy(pr.ticketUrl);
+        return say("⧉ TICKET URL COPIED", C.cyan, 1500);
+      }
+      openUrl(pr.ticketUrl);
+      return say("↗ TICKET OPENED", C.cyan, 1500);
+    }
+    if ("rcdfz ".includes(k)) return say("NO PR YET · ↵ JUMPS TO THE AGENT", C.amber);
+    return;
+  }
   switch (k) {
     case "r":
     case "c": {
@@ -1334,10 +1439,12 @@ function main() {
     if (SNAP[1]) ui.tab = SNAP[1];
     if (SNAP[2] !== undefined) openTask(SNAP[2]);
     if (process.argv.includes("--setup")) startSetup();
-    // SNAP_KEYS='["\u001b[C","\r"]': replay keys before the frame (tests).
-    for (const k of JSON.parse(process.env.SNAP_KEYS || "[]")) onKey(k);
     pollFiles();
     pollAgents();
+    // SNAP_KEYS='["\u001b[C","\r"]': replay keys before the frame (tests).
+    const replay = () => {
+      for (const k of JSON.parse(process.env.SNAP_KEYS || "[]")) onKey(k);
+    };
     if (!DEMO) {
       // pollAgents is async; a snapshot needs the agents now.
       try {
@@ -1346,6 +1453,7 @@ function main() {
         links = linkAgents(agents, data.prs, agentMap);
       } catch {}
     }
+    replay();
     if (process.env.SNAP_FX) {
       // Freeze a shooting star and a shimmer mid-flight for design checks.
       const now = Date.now();

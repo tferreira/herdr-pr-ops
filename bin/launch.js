@@ -249,7 +249,10 @@ async function runTask(t) {
   const name = `t-${branch.toLowerCase().replace(/[^a-z0-9_-]/g, "-")}`.slice(0, 32);
   await startAgent(name, pane);
   const fresh = readJSON(paths.agents, {});
-  fresh[url] = { task: pane };
+  fresh[url] = {
+    task: pane,
+    meta: { kind: t.kind, label: t.label, id: t.id, url: t.url, repoName: t.repoName, repo: (checkoutInfo(t.repoPath) || {}).repo, branch },
+  };
   writeJSON(paths.agents, fresh);
   const cfg = config();
   const custom = (cfg.trackers || []).find((x) => x.name === t.kind);

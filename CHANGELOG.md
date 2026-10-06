@@ -6,6 +6,9 @@ board, keys and config can still change between minor versions.
 ## Unreleased
 
 ### Added
+- Mine has an In progress column: tasks started with `n` and agents on a
+  feature branch of your orgs' repos that has no PR yet, titled by the
+  agent's own terminal title. `enter` jumps, `o` opens the ticket.
 - Merged, closed and approved-by-you PRs keep their card while an agent is
   on them (tagged, last column, up to a day), so deploys and reviews stay
   reachable from the board. "Merged" notification for your PRs.

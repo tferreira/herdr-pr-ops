@@ -1,0 +1,67 @@
+id = "tferreira.herdr-pr-ops"
+name = "PR//OPS"
+version = "0.1.0"
+min_herdr_version = "0.9.0"
+description = "Pull request mission control: your PRs and review requests as columns by state and swimlanes by repo, with one-key agent reviews, re-checks and ships that open in Herdr panes."
+platforms = ["macos", "linux"]
+
+# Needs Node 18+ and an authenticated `gh` on PATH. No npm dependencies.
+
+[[panes]]
+id = "board"
+title = "PR//OPS"
+placement = "popup"
+width = "96%"
+height = "94%"
+command = ["node", "bin/dashboard.js"]
+
+[[panes]]
+id = "demo"
+title = "PR//OPS demo"
+placement = "popup"
+width = "96%"
+height = "94%"
+command = ["node", "bin/dashboard.js", "--demo"]
+
+[[actions]]
+id = "demo"
+title = "Open PR//OPS demo"
+description = "The dashboard with fake data: try the keys, nothing is fetched or launched."
+command = ["node", "bin/open.js", "--demo"]
+
+[[actions]]
+id = "open"
+title = "Open PR//OPS"
+description = "Open the pull request dashboard."
+command = ["node", "bin/open.js"]
+
+[[actions]]
+id = "refresh"
+title = "Refresh pull requests"
+description = "Ask the poller to scan GitHub now."
+command = ["node", "bin/open.js", "--refresh"]
+
+[[actions]]
+id = "task"
+title = "New task from a ticket"
+description = "Start an agent on a YouTrack ticket or Sentry issue."
+command = ["node", "bin/open.js", "--task"]
+
+# Ctrl+click a YouTrack or Sentry issue link in any pane: open the new-task
+# box with that link filled in.
+[[link_handlers]]
+id = "youtrack"
+title = "Start a task on this YouTrack ticket"
+pattern = "^https://[^/]+\\.youtrack\\.cloud/issue/[A-Za-z][A-Za-z0-9_]*-[0-9]+"
+action = "task"
+
+[[link_handlers]]
+id = "sentry"
+title = "Start a task on this Sentry issue"
+pattern = "^https://([^/]+\\.)?sentry\\.io/(organizations/[^/]+/)?issues/[0-9]+"
+action = "task"
+
+# One-shot: starts the detached poller, which keeps the cache fresh and sends
+# notifications. It exits by itself when the Herdr server goes away.
+[[startup]]
+command = ["node", "bin/open.js", "--daemon"]

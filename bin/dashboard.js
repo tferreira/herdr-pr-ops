@@ -501,6 +501,12 @@ function render() {
     tabHits.push({ id: t.id, x0, x1: width(tabs), y: out.length + 1 });
     tabs += S("  ", { bg: C.bg });
   }
+  // GitHub search pages hold 100 PRs; say when a list was cut.
+  const cut = (data.truncated || []).filter((t) => (ui.tab === "mine") === (t.list === "mine"));
+  if (cut.length) {
+    const names = { mine: "your PRs", requested: "review requests", reviewed: "reviewed PRs" };
+    tabs += S(` ▲ ${cut.map((t) => `${names[t.list]}: ${t.shown} of ${t.total}`).join(", ")} `, { fg: C.amber, bg: C.bg });
+  }
   if (filterMode || filter) {
     tabs += S(" ⌕ ", { fg: C.amber, bg: C.bg }) + S(filter + (filterMode && tick % 8 < 4 ? "▏" : " "), { fg: C.white, bg: C.bg, bold: true });
   }
@@ -706,7 +712,7 @@ function overlayHelp(out, W, H) {
     ["o / f", "open PR / files changed in the browser"],
     ["y", "copy PR url"],
     ["z / s", "snooze until the PR changes / show snoozed"],
-    ["n", "new task from a YouTrack ticket or Sentry issue"],
+    ["n", "new task from a ticket: GitHub, Jira, Linear, YouTrack, Sentry"],
     [",", "settings: edit config.json in $EDITOR"],
     ["/", "filter by repo, title, author"],
     ["R  F5", "scan GitHub now"],
@@ -764,8 +770,10 @@ function taskKey(k) {
     if (k === "\x1b") task = null;
     else if (k === "\r") toRepoStep();
     else if (k === "\t") {
-      const t = T.parse(task.input);
-      if (t && /^[A-Za-z]/.test(t.id)) task.kind = (task.kind || t.kind) === "sentry" ? "youtrack" : "sentry";
+      // Cycle through every tracker that accepts the input.
+      const all = T.candidates(task.input);
+      const cur = parsedTask();
+      if (all.length > 1 && cur) task.kind = all[(all.findIndex((c) => c.kind === cur.kind) + 1) % all.length].kind;
     } else if (k === "\x7f") task.input = task.input.slice(0, -1);
     else if (k.length === 1 && k >= " ") task.input += k;
     return;
@@ -812,11 +820,13 @@ function overlayTask(out, W, H) {
   const lines = [B("╔" + "═".repeat(w - 2) + "╗"), row(gradient("◢◤ NEW TASK", C.cyan, C.magenta, { bg, bold: true })), row("")];
   lines.push(row(lab("TICKET", task.step === 0) + S(task.input + (task.step === 0 ? cursor : ""), { fg: C.white, bg, bold: true })));
   if (t) {
+    const all = T.candidates(task.input);
+    const next = all[(all.findIndex((c) => c.kind === t.kind) + 1) % all.length];
     const kindCol = t.kind === "sentry" ? C.violet : C.cyan;
-    const hint = /^[A-Za-z]/.test(t.id) && task.step === 0 ? `   tab: it's ${t.kind === "sentry" ? "YouTrack" : "Sentry"}` : "";
-    lines.push(row(" ".repeat(9) + S(`◆ ${t.kind.toUpperCase()} · ${t.id}`, { fg: kindCol, bg, bold: true }) + S(hint, { fg: C.dim, bg })));
+    const hint = all.length > 1 && task.step === 0 ? `   tab: ${next.label}` : "";
+    lines.push(row(" ".repeat(9) + S(`◆ ${t.label.toUpperCase()} · ${t.id}`, { fg: kindCol, bg, bold: true }) + S(hint, { fg: C.dim, bg })));
   } else {
-    lines.push(row(" ".repeat(9) + S("paste PROJ-123, a YouTrack URL, API-1A or a Sentry URL", { fg: C.dim, bg })));
+    lines.push(row(" ".repeat(9) + S("paste PROJ-123, owner/repo#12, or a GitHub, Jira, Linear, YouTrack or Sentry link", { fg: C.dim, bg })));
   }
   lines.push(row(""));
   if (task.step === 1) {

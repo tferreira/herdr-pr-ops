@@ -314,7 +314,17 @@ function agentFor(pr) {
 }
 
 // Card border badge, herdr-radar style: logo, lifecycle mark, label.
-const { agentMark, glyphs } = require("../lib/marks");
+const { agentMark, glyphs, setGlyphMode } = require("../lib/marks");
+
+// Opened with the open-remote action: this screen is attached from another
+// machine, so use the "remote" settings for this session.
+let REMOTE_SCREEN = false;
+try {
+  const m = U.readJSON(U.paths.pendingMode, null);
+  if (m && m.remote && Date.now() - (m.at || 0) < 60000) REMOTE_SCREEN = true;
+  if (m) fs.unlinkSync(U.paths.pendingMode);
+} catch {}
+if (REMOTE_SCREEN) setGlyphMode(U.config().remote.glyphs);
 function agentBadge(pr, bg) {
   const list = agentsFor(pr);
   if (!list.length) return "";
@@ -531,7 +541,7 @@ function card(pr, w, isSel, laneCol) {
   // top: ╭─  #1872 ───────── octocat · 21m ─╮
   const font = glyphs().done !== "✓";
   const merged = pr.quiet && pr.quiet.kind === "merged";
-  const prIcon = merged ? (font ? "\uf419" : "⛙") : draft ? (font ? "\uf4dd" : "◌") : font ? "\uf407" : "●";
+  const prIcon = merged ? (font ? "\uf419" : "●") : draft ? (font ? "\uf4dd" : "◌") : font ? "\uf407" : "●";
   const num = pr.work
     ? S(isSel ? "▶ " : "", { fg: C.white, bg, bold: true }) +
       S(`◇ ${pr.ticket.length > 18 ? pr.ticket.slice(0, 17) + "…" : pr.ticket}`, { fg: isSel ? C.white : C.violet, bg, bold: true })
@@ -611,7 +621,7 @@ function render() {
       : [["◉", { fg: pulse(C.green, C.bg, 2400) }], [` SYNC ${ago(data.fetchedAt) || "—"}`, { fg: C.mute }]];
   const text = [
     { row: 1, x: Header.LOGO_END + 3, runs: [["pull request mission control", { fg: C.dim, italic: true }]] },
-    { row: 1, x: -2, runs: [[`@${data.me || "?"}   `, { fg: C.violet }], ...sync] },
+    { row: 1, x: -2, runs: [...(REMOTE_SCREEN ? [["⇄ REMOTE SCREEN   ", { fg: C.amber, bold: true }]] : []), [`@${data.me || "?"}   `, { fg: C.violet }], ...sync] },
     { row: 2, x: -2, runs: [...agentSummary(), [clock, { fg: C.mute }]] },
   ];
   for (const l of header.render(W, Date.now(), text)) out.push(line(l));
@@ -1076,7 +1086,8 @@ function current() {
 // wrong machine, or nowhere. `openLinks` in config overrides: auto, browser,
 // copy.
 function noLocalBrowser() {
-  const mode = U.config().openLinks || "auto";
+  const cfg = U.config();
+  const mode = (REMOTE_SCREEN ? cfg.remote.openLinks : cfg.openLinks) || "auto";
   if (mode === "copy") return true;
   if (mode === "browser") return false;
   if (process.env.SSH_CONNECTION || process.env.SSH_TTY || process.env.SSH_CLIENT) return true;

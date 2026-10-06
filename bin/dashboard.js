@@ -102,6 +102,8 @@ function visiblePrs(tab) {
   const q = filter.toLowerCase();
   return data.prs.filter((p) => {
     if (p.tab !== tab) return false;
+    // Merged, closed or approved PRs stay only while an agent is on them.
+    if (p.quiet && !agentsFor(p).length) return false;
     const snooze = ui.snoozed[p.url];
     if (snooze && snooze === p.updatedAt && !ui.showSnoozed) return false;
     if (q && !`${p.repoName} ${p.number} ${p.title} ${p.author}`.toLowerCase().includes(q)) return false;
@@ -373,6 +375,15 @@ function chips(pr, bg) {
   const L = launches[pr.url];
   if (L && L.state === "starting") out.push(S(`${SWEEP[tick % 4]} ${L.msg || "launching"}`.toUpperCase(), { fg: pulse(C.cyan, C.violet, 800), bg, bold: true }));
   else if (L && L.state === "error") out.push(S("✕ LAUNCH FAILED", { fg: C.red, bg, bold: true }));
+  if (pr.quiet) {
+    const q = {
+      merged: ["⛙ MERGED", "#a371f7"],
+      closed: ["✕ CLOSED", C.dim],
+      approved: ["✓ YOU APPROVED", C.green],
+    }[pr.quiet.kind];
+    if (q) out.push(S(q[0], { fg: q[1], bg, bold: true }));
+    return out;
+  }
   if (pr.ci === "pass") out.push(S("✓ CI", { fg: C.green, bg }));
   else if (pr.ci === "fail") out.push(S("✕ CI", { fg: C.red, bg, bold: true }));
   else if (pr.ci === "pending") out.push(S(`${SWEEP[(tick >> 1) % 4]} CI`, { fg: C.amber, bg }));
@@ -404,11 +415,12 @@ function card(pr, w, isSel, laneCol) {
 
   // top: ╭─  #1872 ───────── octocat · 21m ─╮
   const font = glyphs().done !== "✓";
-  const prIcon = draft ? (font ? "\uf4dd" : "◌") : font ? "\uf407" : "●";
+  const merged = pr.quiet && pr.quiet.kind === "merged";
+  const prIcon = merged ? (font ? "\uf419" : "⛙") : draft ? (font ? "\uf4dd" : "◌") : font ? "\uf407" : "●";
   const num =
     S(isSel ? "▶ " : "", { fg: C.white, bg, bold: true }) +
     (mark >= 0 ? S(`☑${mark + 1} `, { fg: C.magenta, bg, bold: true }) : "") +
-    S(prIcon + " ", { fg: draft ? C.mute : C.green, bg, bold: true }) +
+    S(prIcon + " ", { fg: merged ? "#a371f7" : draft || pr.quiet ? C.mute : C.green, bg, bold: true }) +
     S(`#${pr.number}`, { fg: isSel ? C.white : draft ? C.mute : laneCol, bg, bold: true });
   const badge = agentBadge(pr, bg);
   const meta =
@@ -879,6 +891,7 @@ function enterAction(pr) {
 }
 
 function canDeploy(pr) {
+  if (pr.quiet) return pr.quiet.kind === "merged" ? "already merged" : pr.quiet.kind === "closed" ? "closed" : "not yours";
   if (pr.tab !== "mine") return "deploy is for your own PRs";
   if (pr.reviewDecision !== "APPROVED") return "not approved yet";
   if (pr.toAnswer) return `${pr.toAnswer} comment${pr.toAnswer > 1 ? "s" : ""} to answer`;

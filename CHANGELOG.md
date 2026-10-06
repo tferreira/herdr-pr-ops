@@ -5,6 +5,11 @@ board, keys and config can still change between minor versions.
 
 ## Unreleased
 
+### Added
+- Merged, closed and approved-by-you PRs keep their card while an agent is
+  on them (tagged, last column, up to a day), so deploys and reviews stay
+  reachable from the board. "Merged" notification for your PRs.
+
 ### Changed
 - Re-check only for signals meant for you: re-requested, replies in your
   threads, or new commits after you requested changes. New commits after a

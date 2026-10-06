@@ -33,6 +33,10 @@ function diff(before, after) {
   const events = [];
   for (const pr of after.prs) {
     const o = old.get(pr.url);
+    if (pr.quiet) {
+      if (pr.quiet.kind === "merged" && pr.tab === "mine" && !(o && o.quiet)) events.push(["Merged", `${label(pr)}\n${pr.title}`, "done"]);
+      continue;
+    }
     if (pr.tab === "review") {
       if (pr.col === 0 && (!o || o.col !== 0)) events.push(["Review requested", `${label(pr)} · ${pr.author}\n${pr.title}`]);
       if (pr.col === 1 && (!o || o.col !== 1)) events.push(["Re-check", `${label(pr)} · ${pr.reason}\n${pr.title}`]);
@@ -63,7 +67,8 @@ async function poll(full = false) {
   }
   try {
     writeJSON(paths.cache, { ...(readJSON(paths.cache, {}) || {}), refreshing: true });
-    const next = await fetchAll(prev, { full });
+    const launched = Object.keys(readJSON(paths.agents, {}));
+    const next = await fetchAll(prev, { full, launched });
     writeJSON(paths.cache, next);
     if (prev && prev.prs) for (const [t, b, s] of diff(prev, next)) notify(t, b, s);
     prev = next;

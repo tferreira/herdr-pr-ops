@@ -33,7 +33,8 @@ each one in the right checkout.
   starts the right one: a review, a re-check, or a report-only status check
   of your own PR. `r` reviews, `c` re-checks (or, on your own PR, fixes
   feedback, CI and conflicts), `d` ships approved PRs,
-  `n` starts an agent on a YouTrack ticket or Sentry issue. Every prompt is
+  `n` starts an agent on a GitHub, Jira, Linear, YouTrack or Sentry issue.
+  Every prompt is
   yours to configure.
 - **Agents on the board.** Each card shows the agent working on that PR,
   herdr-radar style: spinner while working, a pulsing `?` when it waits on
@@ -95,7 +96,7 @@ opens the board with fake data; nothing is fetched or launched.
 | `o` / `f` | open the PR / its changed files in the browser |
 | `y` | copy the PR URL |
 | `z` / `s` | snooze until the PR changes / show snoozed |
-| `n` | new task from a YouTrack ticket or Sentry issue |
+| `n` | new task from a ticket: GitHub, Jira, Linear, YouTrack or Sentry (`tab` picks the tracker for a bare `PROJ-123`) |
 | `/` | filter by repo, title or author |
 | `R`, `F5` | full rescan |
 | `,` | settings: edit `config.json` in `$EDITOR` |
@@ -123,8 +124,8 @@ selected PR; when `enter` does the same as `r` or `c`, they share a chip
   (`{url}` and `{urls}` hold the space-separated URLs).
 - **Tasks** (`n`) create a worktree on a branch named after the ticket, from
   the remote default branch, and ask the agent for a plan before any code.
-  Ctrl+click a YouTrack or Sentry issue link in any Herdr pane to open the
-  task box prefilled.
+  Ctrl+click an issue link (GitHub, Jira Cloud, Linear, YouTrack Cloud,
+  Sentry) in any Herdr pane to open the task box prefilled.
 
 Fetches go over HTTPS with `gh`'s token, so they work without an SSH agent
 and despite `url.<ssh>.insteadOf` rewrites. Local clones are found as
@@ -148,16 +149,25 @@ optional and changes apply on the next scan.
   "glyphs": "auto",
   "worktreePath": "{repo}-pr{number}",
   "taskWorktreePath": "{repo}-{slug}",
+  "jiraUrl": "https://acme.atlassian.net",
+  "linearUrl": "https://linear.app/acme",
   "youtrackUrl": "https://acme.youtrack.cloud",
+  "defaultTracker": "jira",
   "sentryOrg": "acme",
   "sentryProjects": { "frontend": "web" },
+  "trackers": [
+    { "name": "shortcut", "label": "Shortcut story",
+      "urlPattern": "^https://app\\.shortcut\\.com/[^/]+/story/(\\d+)",
+      "idPattern": "^sc-\\d+$", "link": "https://app.shortcut.com/acme/story/{id}" }
+  ],
   "prompts": {
     "review": "/my-review-skill {url}",
     "recheck": "Were my review comments on {url} addressed? ...",
     "status": "Check the status of my pull request {url} and report only. ...",
     "address": "Get my pull request {url} ready. ...",
     "deploy": "/release {url}",
-    "youtrack": "Work on YouTrack ticket {id}{urlNote}. ...",
+    "ticket": "Work on {label} {id}{urlNote}. ...",
+    "github": "Work on GitHub issue {id}{urlNote}. ...",
     "sentry": "Investigate Sentry issue {id}{urlNote}. ..."
   }
 }
@@ -177,13 +187,27 @@ optional and changes apply on the next scan.
 The default prompts are plain instructions any agent can follow: reviews and
 re-checks work through `gh`, ships follow the release process the agent finds
 in the repo (README, CONTRIBUTING, CLAUDE.md, CI config) and always ask before
-merging, and tickets use the agent's YouTrack or Sentry tools (MCP) or ask you
-to paste the ticket. If you have skills or slash commands for these, point the
+merging, and tickets use `gh` for GitHub issues and the agent's own tools
+(MCP) for other trackers, or ask you to paste the ticket. If you have skills or slash commands for these, point the
 prompts at them, e.g. `"review": "/my-review {url}"`.
 
-YouTrack and Sentry short IDs look alike (`PROJ-123`, `API-1A`). A prefix that
-matches a repo name or a `sentryProjects` key is read as Sentry, otherwise
-YouTrack; `tab` in the task box flips it.
+### Trackers
+
+| tracker | recognised | branch / worktree |
+|---|---|---|
+| GitHub | `https://github.com/o/r/issues/12`, `o/r#12` | `issue-12`, `<clone>-issue12` |
+| Jira | any `…/browse/PROJ-12` URL | `PROJ-12`, `<clone>-proj12` |
+| Linear | `https://linear.app/<team>/issue/ENG-12…` | `ENG-12`, `<clone>-eng12` |
+| YouTrack | any `…/issue/PROJ-12` URL | `PROJ-12`, `<clone>-proj12` |
+| Sentry | `…sentry.io/issues/123`, short IDs like `API-1A` | `API-1A`, `<clone>-1a` |
+| yours | `trackers` entries: `urlPattern` (group 1 = id), `idPattern`, `link` (`{id}`), `prompt` | |
+
+A bare `PROJ-123` could be Jira, Linear or YouTrack: it goes to
+`defaultTracker`, or the first of those whose base URL you set, and `tab` in
+the task box cycles through the alternatives. A key whose prefix is a repo
+name or a `sentryProjects` key reads as a Sentry short ID. Each tracker uses
+`prompts.<name>` when set, else `prompts.ticket` (`{label}`, `{id}`, `{url}`,
+`{urlNote}`).
 
 ## Rules worth knowing
 
@@ -209,11 +233,15 @@ sh tools/screenshots.sh                            # regenerate assets/
 | `bin/launch.js` | worktrees, panes and agents |
 | `bin/open.js` | actions and startup hook |
 | `lib/github.js` | GraphQL queries and column rules |
-| `lib/tickets.js` | ticket parsing, local repo discovery |
+| `lib/tickets.js` | trackers, ticket parsing, local repo discovery |
 | `lib/header.js` | the animated logo band |
 | `lib/marks.js` | agent marks |
 | `lib/gitinfo.js` | repo and branch of a directory |
 | `lib/agentlink.js` | which PR each agent is working on |
+
+## Changes
+
+See [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 

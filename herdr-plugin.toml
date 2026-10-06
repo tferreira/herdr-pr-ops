@@ -1,6 +1,6 @@
 id = "tferreira.herdr-pr-ops"
 name = "PR//OPS"
-version = "0.1.0"
+version = "0.2.0"
 min_herdr_version = "0.9.0"
 description = "Pull request mission control: your PRs and review requests as columns by state and swimlanes by repo, with one-key agent reviews, re-checks and ships that open in Herdr panes."
 platforms = ["macos", "linux"]
@@ -44,14 +44,32 @@ command = ["node", "bin/open.js", "--refresh"]
 [[actions]]
 id = "task"
 title = "New task from a ticket"
-description = "Start an agent on a YouTrack ticket or Sentry issue."
+description = "Start an agent on a GitHub, Jira, Linear, YouTrack or Sentry issue."
 command = ["node", "bin/open.js", "--task"]
 
-# Ctrl+click a YouTrack or Sentry issue link in any pane: open the new-task
-# box with that link filled in.
+# Ctrl+click an issue link in any pane: open the new-task box with that link
+# filled in.
+[[link_handlers]]
+id = "github-issue"
+title = "Start a task on this GitHub issue"
+pattern = "^https://github\\.com/[^/]+/[^/]+/issues/[0-9]+"
+action = "task"
+
+[[link_handlers]]
+id = "jira"
+title = "Start a task on this Jira issue"
+pattern = "^https://[^/]+\\.atlassian\\.net/browse/[A-Za-z][A-Za-z0-9_]*-[0-9]+"
+action = "task"
+
+[[link_handlers]]
+id = "linear"
+title = "Start a task on this Linear issue"
+pattern = "^https://linear\\.app/[^/]+/issue/[A-Za-z][A-Za-z0-9_]*-[0-9]+"
+action = "task"
+
 [[link_handlers]]
 id = "youtrack"
-title = "Start a task on this YouTrack ticket"
+title = "Start a task on this YouTrack issue"
 pattern = "^https://[^/]+\\.youtrack\\.cloud/issue/[A-Za-z][A-Za-z0-9_]*-[0-9]+"
 action = "task"
 

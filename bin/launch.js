@@ -4,7 +4,7 @@
 // launch.js <review|recheck|status|address|deploy> <pr-url> [<pr-url>...] [--pane <id>]
 //   several urls: deploy only, one repo. --pane: an agent already on the PR
 //   (picked by the dashboard), prompted instead of starting a new one when idle.
-// launch.js task '{"kind":"youtrack","id":"PROJ-123","url":null,"repoPath":"/.../api"}'
+// launch.js task '{"kind":"jira","label":"Jira issue","id":"PROJ-123","url":null,"repoPath":"/.../api","repoName":"api"}'
 //
 // Starts (or reuses) a Claude pane for a PR. Reviews run in a Herdr worktree
 // checked out at the PR head (branch pr-<N>); deploys run in a new tab of the
@@ -205,9 +205,9 @@ async function startAgent(name, pane) {
 // main checkout happens to have checked out. An existing branch or worktree
 // for the ticket is reused.
 function taskPane(t) {
-  const { slug } = require("../lib/tickets");
+  const { slug, branchName } = require("../lib/tickets");
   const repo = t.repoPath;
-  const branch = t.id;
+  const branch = branchName(t);
   setStatus("starting", "fetching origin");
   let base;
   try {
@@ -218,7 +218,7 @@ function taskPane(t) {
   const nameWithOwner = (checkoutInfo(repo) || {}).repo;
   if (nameWithOwner) fetchGh(repo, nameWithOwner, [`+refs/heads/${base.replace(/^origin\//, "")}:refs/remotes/${base}`]);
   else sh("git", ["-C", repo, "fetch", "--quiet", "origin"]);
-  const wtPath = fill(config().taskWorktreePath, { repo, slug: slug(t) });
+  const wtPath = fill(config().taskWorktreePath, { repo, slug: slug(t, t.repoName) });
   const wts = herdr(["worktree", "list", "--cwd", repo]).worktrees || [];
   const wt = wts.find((w) => w.branch === branch || w.path === wtPath);
   if (wt) {
@@ -246,15 +246,18 @@ async function runTask(t) {
   setStatus("starting", "opening pane");
   const pane = taskPane(t);
   setStatus("starting", "starting agent");
-  const name = `t-${t.id.toLowerCase().replace(/[^a-z0-9_-]/g, "-")}`.slice(0, 32);
+  const name = `t-${branch.toLowerCase().replace(/[^a-z0-9_-]/g, "-")}`.slice(0, 32);
   await startAgent(name, pane);
   const fresh = readJSON(paths.agents, {});
   fresh[url] = { task: pane };
   writeJSON(paths.agents, fresh);
-  const text = fill(config().prompts[t.kind], { id: t.id, url: t.url || "", urlNote: t.url ? ` (${t.url})` : "" });
+  const cfg = config();
+  const custom = (cfg.trackers || []).find((x) => x.name === t.kind);
+  const tpl = (custom && custom.prompt) || cfg.prompts[t.kind] || cfg.prompts.ticket;
+  const text = fill(tpl, { id: t.id, label: t.label, url: t.url || "", urlNote: t.url ? ` (${t.url})` : "" });
   herdr(["agent", "prompt", pane, text]);
   setStatus("done");
-  herdr(["notification", "show", `${t.kind === "sentry" ? "Sentry" : "YouTrack"} task started`, "--body", `${t.id} in ${t.repoName}`, "--sound", "none"]);
+  herdr(["notification", "show", `${t.label} task started`, "--body", `${t.id} in ${t.repoName}`, "--sound", "none"]);
   log(`task ${t.id} started in ${pane}`);
 }
 

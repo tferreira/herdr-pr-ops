@@ -68,12 +68,14 @@ Requirements: [Herdr](https://herdr.dev) 0.9+, Node 18+, and an authenticated
 herdr plugin install tferreira/herdr-pr-ops
 ```
 
-Bind the board to a key in `~/.config/herdr/config.toml`, then run
-`herdr server reload-config`:
+The install binds the board to `prefix+d` (`prefix+alt+d` if that is taken)
+in a marked block at the end of Herdr's `config.toml`, and leaves the file
+alone if you already bound it. To pick your own key, run
+`herdr plugin action invoke tferreira.herdr-pr-ops.remove-keybinding` and add:
 
 ```toml
 [[keys.command]]
-key = "prefix+d"
+key = "prefix+alt+p"
 type = "plugin_action"
 command = "tferreira.herdr-pr-ops.open"
 description = "PR//OPS"
@@ -100,7 +102,8 @@ Want to look around first? `herdr plugin action invoke tferreira.herdr-pr-ops.de
 opens the board with fake data; nothing is fetched or launched.
 
 Update by running the install command again (see [CHANGELOG.md](CHANGELOG.md)
-for what changed); remove with `herdr plugin uninstall tferreira.herdr-pr-ops`.
+for what changed); remove with the `remove-keybinding` action, then
+`herdr plugin uninstall tferreira.herdr-pr-ops`.
 
 ## Keys
 
@@ -252,6 +255,7 @@ sh tools/screenshots.sh                            # regenerate assets/
 | `bin/daemon.js` | poller and notifications |
 | `bin/launch.js` | worktrees, panes and agents |
 | `bin/open.js` | actions and startup hook |
+| `bin/configure.js` | the key binding in Herdr's config.toml |
 | `lib/github.js` | GraphQL queries and column rules |
 | `lib/tickets.js` | trackers, ticket parsing, local repo discovery |
 | `lib/header.js` | the animated logo band |

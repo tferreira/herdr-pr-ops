@@ -40,15 +40,6 @@ title = "Open PR//OPS"
 description = "Open the pull request dashboard."
 command = ["node", "bin/open.js"]
 
-# For a screen attached with `herdr --remote`: bind this one in that
-# machine's own config.toml. Same board; links are copied to that screen's
-# clipboard and icons are plain text (config "remote" block).
-[[actions]]
-id = "open-remote"
-title = "Open PR//OPS for a remote screen"
-description = "Open the board with remote-screen settings: links copied (OSC 52), plain-text icons."
-command = ["node", "bin/open.js", "--remote-screen"]
-
 [[actions]]
 id = "keybinding"
 title = "Bind PR//OPS to a key"

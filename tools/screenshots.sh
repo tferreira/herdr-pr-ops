@@ -1,7 +1,7 @@
 #!/bin/sh
 # Regenerate the README images from the demo board (fake data, no GitHub).
-# Needs Google Chrome, ffmpeg, and a Nerd Font (ideally herdr-radar's icon
-# font merged in) for the icons.
+# Needs Google Chrome, ffmpeg, and MesloLGM Nerd Font 3.5 or later for the
+# icons.
 set -eu
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)

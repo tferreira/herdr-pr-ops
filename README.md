@@ -36,8 +36,8 @@ each one in the right checkout.
   `n` starts an agent on a GitHub, Jira, Linear, YouTrack or Sentry issue.
   Every prompt is
   yours to configure.
-- **Agents on the board.** Each card shows the agent working on that PR,
-  herdr-radar style: spinner while working, a pulsing `?` when it waits on
+- **Agents on the board.** Each card shows the agent working on that PR:
+  spinner while working, a pulsing `?` when it waits on
   you, `✓` when done. Agents you started by hand count too, matched by their
   title, their folder's branch and, for Claude Code, the PR URLs, worktree
   paths, branches and ticket IDs in their recent session. `enter` jumps to the
@@ -61,8 +61,10 @@ each one in the right checkout.
 
 ## Install
 
-Requirements: [Herdr](https://herdr.dev) 0.9+, Node 18+, and an authenticated
-[GitHub CLI](https://cli.github.com) (`gh auth login`).
+Requirements: [Herdr](https://herdr.dev) 0.9+, Node 18+, an authenticated
+[GitHub CLI](https://cli.github.com) (`gh auth login`), and a
+[Nerd Font](https://www.nerdfonts.com) 3.5 or later in your terminal for the
+icons (or set `"icons": "text"`).
 
 ```sh
 herdr plugin install tferreira/herdr-pr-ops
@@ -118,13 +120,12 @@ for what changed); remove with the `remove-keybinding` action, then
 | `x` `x` | stop the card's agent (press twice). The PR stays on the board; see below for what is cleaned up |
 | `enter` | jump to the PR's agent. No agent yet: review a new PR, re-check one with news since your review, or on your own PR a report-only status check (feedback, CI, conflicts). Does nothing on PRs waiting on their author |
 | `o` / `f` | open the PR / its changed files in the browser |
-| `y` | copy the PR URL |
+| `y` | copy the PR URL (to the screen you look at, also over `herdr --remote`) |
 | `z` / `s` | snooze until the PR changes / show snoozed |
 | `n` | new task from a ticket: GitHub, Jira, Linear, YouTrack or Sentry (`tab` picks the tracker for a bare `PROJ-123`) |
 | `/` | filter by repo, title or author |
 | `R`, `F5` | full rescan |
 | `,` | settings: edit `config.json` in `$EDITOR` |
-| `m` | screen mode: remote screen (`herdr --remote`) / this screen |
 | `?` | help |
 | `q`, `esc` | close |
 
@@ -175,7 +176,7 @@ optional and changes apply on the next scan.
   "repos": { "acme/api": "~/work/api" },
   "pollSeconds": 180,
   "agentKind": "claude",
-  "glyphs": "auto",
+  "icons": "nerd",
   "worktreePath": "{repo}-pr{number}",
   "taskWorktreePath": "{repo}-{slug}",
   "jiraUrl": "https://acme.atlassian.net",
@@ -209,9 +210,9 @@ optional and changes apply on the next scan.
 | `repoRoots` | `~/code`, `~/src`, `~/projects`, `~/repos`, `~/git`, `~/dev` | where clones live |
 | `repos` | | explicit `owner/name` → path |
 | `pollSeconds` | `180` | scan interval |
-| `openLinks` | `auto` | `o` / `f`: `browser`, `copy` (OSC 52 to your terminal's clipboard), or `auto` (copy over SSH or without a display) |
+| `openLinks` | `auto` | `o` / `f`: `browser`, `copy` (OSC 52 to your terminal's clipboard), or `auto` (copy on a machine without a display, like plain SSH) |
 | `agentKind` | `claude` | any [Herdr agent kind](https://herdr.dev) |
-| `glyphs` | `auto` | `font` uses [herdr-radar](https://github.com/hhdebb/herdr-radar)'s icon font and Nerd Font icons, `text` plain Unicode, `auto` picks `font` when herdr-radar is installed |
+| `icons` | `nerd` | `nerd`: [Nerd Font](https://www.nerdfonts.com) icons (3.5+ for the Claude and OpenAI logos); `text`: plain Unicode for any font |
 | `prompts.*` | plain-language prompts, no skills needed | point them at your own skills or slash commands. PR prompts get `{url}` `{urls}` `{repo}` `{number}`, task prompts `{id}` `{url}` `{urlNote}` |
 
 The default prompts are plain instructions any agent can follow: reviews and
@@ -245,36 +246,11 @@ Install PR//OPS only on the machine that runs the Herdr server, with Node,
 `gh`, your clones and your agent. The machine you attach from needs no
 plugin: it only draws the board.
 
-It does need one key binding. With `--remote`, Herdr uses the key bindings
-of the machine you sit at, and the install only added `prefix+d` on the
-server. Bind it on the attaching machine to `open-remote`: the same board,
-but links (`o`, `f`, `y`) go to that machine's clipboard instead of opening a
-browser on the server, and icons are plain text for terminals without
-herdr-radar's font. The header shows `⇄ REMOTE SCREEN`.
-
-Windows (PowerShell), once:
-
-```powershell
-New-Item -ItemType Directory -Force "$env:APPDATA\herdr" | Out-Null
-Add-Content "$env:APPDATA\herdr\config.toml" "`n[[keys.command]]`nkey = `"prefix+d`"`ntype = `"plugin_action`"`ncommand = `"tferreira.herdr-pr-ops.open-remote`"`ndescription = `"PR//OPS`""
-```
-
-macOS or Linux:
-
-```sh
-printf '\n[[keys.command]]\nkey = "prefix+d"\ntype = "plugin_action"\ncommand = "tferreira.herdr-pr-ops.open-remote"\ndescription = "PR//OPS"\n' >> "${XDG_CONFIG_HOME:-$HOME/.config}/herdr/config.toml"
-```
-
-Then reattach (or use Herdr's reload-config action). Sitting at the server
-machine, `prefix+d` keeps opening the normal board.
-
-- No binding on the attaching machine? `herdr --remote <host>
-  --remote-keybindings server` uses the server's `prefix+d`, and `m` on the
-  board switches to remote-screen mode (remembered until you press it again).
-- Over plain SSH or on a machine without a display, links are copied
-  automatically; `"openLinks": "copy"` forces it.
-- `"remote": { "openLinks": "copy", "glyphs": "text" }` changes what
-  remote-screen mode does.
+- Attach with `herdr --remote <host> --remote-keybindings server`, so
+  `prefix+d` (bound on the server at install) works there too.
+- `y` copies the PR link to the clipboard of the screen you look at. `o` and
+  `f` open the browser on the server machine.
+- The icons need a Nerd Font on the attaching machine's terminal as well.
 
 ## Rules worth knowing
 

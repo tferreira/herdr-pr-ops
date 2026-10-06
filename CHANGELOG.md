@@ -6,15 +6,15 @@ board, keys and config can still change between minor versions.
 ## Unreleased
 
 ### Added
-- Remote-friendly links: `y` copies through the terminal (OSC 52) when the
-  board runs over SSH or without a display, and `o` / `f` copy the link
-  there instead of opening a browser on the wrong machine. `openLinks`
-  config (`auto`, `browser`, `copy`).
-- `open-remote` action for screens attached with `herdr --remote`: bind it
-  in that machine's config.toml to get links copied to its clipboard and
-  plain-text icons, while the server machine keeps the normal board.
-- `m` toggles remote-screen mode from the board (remembered), so attaching
-  from another machine needs no config there.
+- Works over `herdr --remote`: `y` copies the PR link to the clipboard of
+  the screen you look at (OSC 52), and also to the server's. On a machine
+  without a display, `o` and `f` copy instead of opening a browser.
+  `openLinks` config (`auto`, `browser`, `copy`).
+
+### Changed
+- Icons are Nerd Font icons for everyone, including the Claude and OpenAI
+  logos (Nerd Fonts 3.5 or later). `"icons": "text"` uses plain Unicode for
+  terminals without a Nerd Font. Replaces the `glyphs` setting.
 
 ### Fixed
 - Stopping (`x`) the agent whose tab the board was opened from closed the
@@ -92,7 +92,7 @@ board, keys and config can still change between minor versions.
 - Ticket trackers: GitHub Issues, Jira, Linear, YouTrack and Sentry built in,
   your own via `trackers`. Bare `PROJ-123` goes to `defaultTracker`; `tab`
   in the task box cycles the alternatives. Ctrl+click handlers for all five.
-- Agent marks in herdr-radar style; drafts drawn dashed and dim with GitHub's
+- Agent marks on cards; drafts drawn dashed and dim with GitHub's
   draft icon.
 - Header warning when a list holds more than the 100 PRs one search page
   returns.

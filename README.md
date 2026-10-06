@@ -255,6 +255,7 @@ herdr-radar's font. The header shows `⇄ REMOTE SCREEN`.
 Windows (PowerShell), once:
 
 ```powershell
+New-Item -ItemType Directory -Force "$env:APPDATA\herdr" | Out-Null
 Add-Content "$env:APPDATA\herdr\config.toml" "`n[[keys.command]]`nkey = `"prefix+d`"`ntype = `"plugin_action`"`ncommand = `"tferreira.herdr-pr-ops.open-remote`"`ndescription = `"PR//OPS`""
 ```
 

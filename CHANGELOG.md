@@ -13,6 +13,12 @@ board, keys and config can still change between minor versions.
   on them (tagged, last column, up to a day), so deploys and reviews stay
   reachable from the board. "Merged" notification for your PRs.
 
+- Tasks show on the board as soon as they launch ("starting agent"), and a
+  failed launch stays as a card with the reason; `enter` retries.
+
+### Fixed
+- Starting a task opened a tab but no agent ("branch is not defined").
+
 ### Changed
 - Re-check only for signals meant for you: re-requested, replies in your
   threads, or new commits after you requested changes. New commits after a

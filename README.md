@@ -26,7 +26,7 @@ each one in the right checkout.
 
   | tab | columns |
   |---|---|
-  | **Mine** | Needs you (changes requested, comments to answer, CI failed, conflict) → In review → Ready to ship |
+  | **Mine** | In progress (agents on a branch with no PR yet) → Needs you (changes requested, comments to answer, CI failed, conflict) → In review → Ready to ship |
   | **To review** | New → Re-check (re-requested, replies in your threads, or new commits after you requested changes) → Waiting on author |
 
 - **One key does the obvious thing.** `enter` jumps to the PR's agent, or
@@ -239,6 +239,10 @@ name or a `sentryProjects` key reads as a Sentry short ID. Each tracker uses
   last push, comment or review. Bots are ignored.
 - **CircleCI approval jobs** waiting "on hold" count as passing CI.
 - PRs you approved leave To review unless you are re-requested.
+- **In progress** holds work that has no PR yet: tasks started with `n`, and
+  any agent sitting on a feature branch (not main/master) of a repo in your
+  `orgs`. The card shows the ticket or branch and the agent's own title; once
+  the agent opens a PR, the PR card takes over.
 - A PR that leaves the lists (merged, closed, or approved by you) keeps its
   card in the last column, tagged `⛙ MERGED`, `✕ CLOSED` or `✓ YOU APPROVED`,
   while an agent is on it, so you can follow a deploy or a review to the end.

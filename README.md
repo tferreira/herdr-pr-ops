@@ -27,7 +27,7 @@ each one in the right checkout.
   | tab | columns |
   |---|---|
   | **Mine** | Needs you (changes requested, comments to answer, CI failed, conflict) → In review → Ready to ship |
-  | **To review** | New → Re-check (new commits, replies on your threads, or re-requested since your last review) → Waiting on author |
+  | **To review** | New → Re-check (re-requested, replies in your threads, or new commits after you requested changes) → Waiting on author |
 
 - **One key does the obvious thing.** `enter` jumps to the PR's agent, or
   starts the right one: a review, a re-check, or a report-only status check

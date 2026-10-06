@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 "use strict";
 
-// launch.js <review|recheck|deploy> <pr-url> [<pr-url>...]   (several: deploy only, one repo)
+// launch.js <review|recheck|address|deploy> <pr-url> [<pr-url>...] [--pane <id>]
+//   several urls: deploy only, one repo. --pane: an agent already on the PR
+//   (picked by the dashboard), prompted instead of starting a new one when idle.
 // launch.js task '{"kind":"youtrack","id":"PROJ-123","url":null,"repoPath":"/.../api"}'
 //
 // Starts (or reuses) a Claude pane for a PR. Reviews run in a Herdr worktree
@@ -11,7 +13,10 @@
 
 const { paths, readJSON, writeJSON, config, log, herdr, sh, localRepoPath, HOME, fill } = require("../lib/util");
 
-const [kind, arg, ...more] = process.argv.slice(2);
+const argv = process.argv.slice(2);
+const paneFlag = argv.indexOf("--pane");
+const reusePane = paneFlag >= 0 ? argv.splice(paneFlag, 2)[1] : null;
+const [kind, arg, ...more] = argv;
 const task = kind === "task" ? JSON.parse(arg) : null;
 // launches.json / agents.json keys: the PR urls, or task:<ticket id>.
 const keys = task ? [`task:${task.id}`] : [arg, ...more];
@@ -63,6 +68,43 @@ function rootPane(result) {
   const panes = herdr(["pane", "list", "--workspace", ws]).panes || [];
   if (!panes.length) throw new Error(`workspace ${ws} has no panes`);
   return panes[0].pane_id;
+}
+
+// My own PR: an existing checkout of its branch (moved to origin's head when
+// clean), or a new worktree of it.
+function addressPane(pr) {
+  const repo = localRepoPath(pr.repo);
+  const label = `${pr.repoName}#${pr.number}`;
+  if (!repo) return rootPane(herdr(["workspace", "create", "--cwd", HOME, "--label", label, "--no-focus"]));
+  const branch = pr.headRef;
+  setStatus("starting", "fetching branch");
+  sh("git", ["-C", repo, "fetch", "--quiet", "origin", branch]);
+  const remote = `refs/remotes/origin/${branch}`;
+  const wts = herdr(["worktree", "list", "--cwd", repo]).worktrees || [];
+  const wt = wts.find((w) => w.branch === branch);
+  if (wt) {
+    if (!sh("git", ["-C", wt.path, "status", "--porcelain"]).trim()) {
+      try {
+        sh("git", ["-C", wt.path, "merge", "--quiet", "--ff-only", remote]);
+      } catch (e) {
+        log(`${wt.path}: not fast-forwarded to origin (${e.message.split("\n")[0]})`);
+      }
+    }
+    if (wt.open_workspace_id) {
+      return rootPane(herdr(["tab", "create", "--workspace", wt.open_workspace_id, "--cwd", wt.path, "--label", "address", "--no-focus"]));
+    }
+    return rootPane(herdr(["worktree", "open", "--cwd", repo, "--path", wt.path, "--label", label, "--no-focus"]));
+  }
+  let hasBranch = true;
+  try {
+    sh("git", ["-C", repo, "rev-parse", "--verify", "--quiet", `refs/heads/${branch}`]);
+  } catch {
+    hasBranch = false;
+  }
+  if (!hasBranch) sh("git", ["-C", repo, "branch", "--track", branch, remote]);
+  const wtPath = fill(config().worktreePath, { repo, number: pr.number });
+  setStatus("starting", "creating worktree");
+  return rootPane(herdr(["worktree", "create", "--cwd", repo, "--branch", branch, "--path", wtPath, "--label", label, "--no-focus"]));
 }
 
 function reviewPane(pr) {
@@ -196,11 +238,11 @@ async function main() {
   if (missing.length) throw new Error(`PR not in cache: ${missing.join(" ")}`);
   if (new Set(prs.map((p) => p.repo)).size > 1) throw new Error("one launch per repo");
   const pr = prs[0];
-  const slot = kind === "deploy" ? "deploy" : "review";
+  const slot = kind === "deploy" ? "deploy" : kind === "address" ? "work" : "review";
   const agents = readJSON(paths.agents, {});
   const known = agents[url] && agents[url][slot];
 
-  const live = keys.length === 1 ? liveAgent(known) : null;
+  const live = keys.length === 1 ? liveAgent(reusePane) || liveAgent(known) : null;
   if (live) {
     if (!["idle", "done"].includes(live.agent_status)) {
       throw new Error(`agent is ${live.agent_status}, press enter to go to it`);
@@ -211,7 +253,7 @@ async function main() {
   }
 
   setStatus("starting", "opening pane");
-  const pane = kind === "deploy" ? deployPane(prs) : reviewPane(pr);
+  const pane = kind === "deploy" ? deployPane(prs) : kind === "address" ? addressPane(pr) : reviewPane(pr);
   setStatus("starting", "starting agent");
   await startAgent(agentName(prs), pane);
 

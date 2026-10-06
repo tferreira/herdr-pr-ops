@@ -30,7 +30,8 @@ each one in the right checkout.
   | **To review** | New → Re-check (new commits, replies on your threads, or re-requested since your last review) → Waiting on author |
 
 - **One key per action.** `r` reviews a PR in a fresh worktree at its head,
-  `c` asks whether your comments were addressed, `d` ships an approved PR,
+  `c` asks whether your comments were addressed (or, on your own PR, works
+  through the feedback you got), `d` ships approved PRs,
   `n` starts an agent on a YouTrack ticket or Sentry issue. Every prompt is
   yours to configure.
 - **Agents on the board.** Each card shows the agent working on that PR,
@@ -86,7 +87,7 @@ opens the board with fake data; nothing is fetched or launched.
 | `←→↑↓` (or `hjkl`) | move between columns and PRs |
 | `tab`, `1`, `2` | switch Mine / To review |
 | `r` | review: new agent in a worktree at the PR head |
-| `c` | re-check: were your comments addressed? Reuses the review agent when it is still open |
+| `c` | comments. To review: were your comments addressed? Mine: address the review feedback on your PR. Reuses an idle agent already on the PR |
 | `d` | ship an approved PR (CI green, nothing to answer, no conflict), or every marked PR |
 | `space`, alt+click | mark a ready PR for a multi-ship; marks are numbered in shipping order, `esc` clears them |
 | `enter` | jump to the PR's agent |
@@ -110,6 +111,11 @@ selected PR.
   open it as a Herdr worktree next to your clone (`<clone>-pr<N>`), so your
   own checkout is never touched. A re-check moves a clean review worktree to
   the new head and reuses the agent if it is still open.
+- **Addressing feedback** (`c` on your PR) prompts the agent already on the
+  PR when it is idle; otherwise it opens your existing checkout of the PR's
+  branch (fast-forwarded to origin when clean) or a new worktree of it. The
+  agent fixes or drafts replies, runs tests, and shows you everything before
+  committing, pushing or posting.
 - **Ships** (`d`) open a tab in the repo's workspace. Marked PRs ship
   together: one agent per repo, given all of that repo's PRs in marking order
   (`{url}` and `{urls}` hold the space-separated URLs).
@@ -144,6 +150,7 @@ optional and changes apply on the next scan.
   "prompts": {
     "review": "/my-review-skill {url}",
     "recheck": "Were my review comments on {url} addressed? ...",
+    "address": "Address the review feedback on my pull request {url}. ...",
     "deploy": "/release {url}",
     "youtrack": "Work on YouTrack ticket {id}{urlNote}. ...",
     "sentry": "Investigate Sentry issue {id}{urlNote}. ..."

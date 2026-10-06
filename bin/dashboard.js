@@ -277,7 +277,7 @@ function refresh(full = false) {
 }
 
 // One agent for `prs` (several only for deploy, all from one repo).
-function launch(kind, prs) {
+function launch(kind, prs, reusePane) {
   if (!Array.isArray(prs)) prs = [prs];
   const names = prs.map((p) => `${p.repoName}#${p.number}`).join(" ");
   if (DEMO) return say(`DEMO MODE · WOULD ${kind.toUpperCase()} ${names}`, C.violet);
@@ -285,13 +285,15 @@ function launch(kind, prs) {
   for (const p of prs) all[p.url] = { kind, state: "starting", msg: "queued", at: new Date().toISOString() };
   U.writeJSON(U.paths.launches, all);
   launches = all;
-  const child = spawn(process.execPath, [path.join(__dirname, "launch.js"), kind, ...prs.map((p) => p.url)], {
+  const args = [path.join(__dirname, "launch.js"), kind, ...prs.map((p) => p.url)];
+  if (reusePane) args.push("--pane", reusePane);
+  const child = spawn(process.execPath, args, {
     detached: true,
     stdio: "ignore",
     env: process.env,
   });
   child.unref();
-  const verb = { review: "REVIEW", recheck: "RE-CHECK", deploy: "DEPLOY" }[kind];
+  const verb = { review: "REVIEW", recheck: "RE-CHECK", address: "ADDRESS COMMENTS", deploy: "DEPLOY" }[kind];
   say(`▲ ${verb} LAUNCHING · ${names}`, C.magenta);
 }
 
@@ -657,7 +659,8 @@ function footerLines(sel, W, base) {
     S(" ", { bg: C.bg }) +
     (ui.tab === "review"
       ? key(" r ", "REVIEW") + key(" c ", "RE-CHECK")
-      : key(" d ", marked.length ? `DEPLOY ${marked.length}` : "DEPLOY", marked.length > 0 || (sel && canDeploy(sel.pr) === true)) +
+      : key(" c ", "ADDRESS") +
+        key(" d ", marked.length ? `DEPLOY ${marked.length}` : "DEPLOY", marked.length > 0 || (sel && canDeploy(sel.pr) === true)) +
         key(" ␣ ", "MARK", !!(sel && canDeploy(sel.pr) === true))) +
     key(" ↵ ", "JUMP", !!(sel && agentFor(sel.pr))) +
     key(" o ", "OPEN") +
@@ -679,7 +682,7 @@ function overlayHelp(out, W, H) {
     ["←→ ↑↓", "move between columns / PRs (hjkl too)"],
     ["tab  1 2", "switch MINE / TO REVIEW"],
     ["r", "review: new agent pane in a PR worktree (prompts.review)"],
-    ["c", "re-check: were my comments addressed? reuses the review agent"],
+    ["c", "comments: re-check others' PRs / address the ones on mine"],
     ["d", "deploy: prompts.deploy (approved, CI green, no conflict)"],
     ["space", "mark for a multi-deploy (alt+click too); d ships all"],
     ["enter", "jump to the PR's agent pane"],
@@ -998,12 +1001,14 @@ function onKey(k) {
   switch (k) {
     case "r":
     case "c": {
-      if (pr.tab !== "review") return say("r / c WORK ON THE TO REVIEW TAB", C.amber);
+      // c means "comments": re-check them on others' PRs, address them on mine.
+      if (pr.tab !== "review" && k === "r") return say("r REVIEWS PRS ON THE TO REVIEW TAB · c ADDRESSES COMMENTS HERE", C.amber);
       const L = launches[pr.url];
       if (L && L.state === "starting") return say("ALREADY LAUNCHING", C.amber);
       const ag = agentFor(pr);
       if (ag && !["idle", "done"].includes(ag.agent_status)) return say(`AGENT IS ${ag.agent_status.toUpperCase()} · ↵ TO JUMP`, C.amber);
-      return launch(k === "r" ? "review" : "recheck", pr);
+      const kind = pr.tab === "mine" ? "address" : k === "r" ? "review" : "recheck";
+      return launch(kind, pr, ag && ag.pane_id);
     }
     case " ":
       return toggleMark(pr);

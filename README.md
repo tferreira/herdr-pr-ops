@@ -79,8 +79,32 @@ command = "tferreira.herdr-pr-ops.open"
 description = "PR//OPS"
 ```
 
+Point it at your work: press `,` on the board (or edit
+`$(herdr plugin config-dir tferreira.herdr-pr-ops)/config.json`). The usual
+first settings:
+
+```json
+{
+  "orgs": ["acme"],
+  "repoRoots": ["~/work"],
+  "youtrackUrl": "https://acme.youtrack.cloud",
+  "prompts": { "review": "/my-review-skill {url}" }
+}
+```
+
+- `orgs` keeps other orgs' and personal PRs off the board.
+- `repoRoots` is where your clones live, so agents start in the right repo.
+- A tracker URL (`jiraUrl`, `linearUrl` or `youtrackUrl`) makes bare
+  `PROJ-123` IDs resolve; see [Trackers](#trackers).
+- `prompts` only if you have your own skills; the defaults work without.
+
+Every other setting is in [Settings](#settings).
+
 Want to look around first? `herdr plugin action invoke tferreira.herdr-pr-ops.demo`
 opens the board with fake data; nothing is fetched or launched.
+
+Update by running the install command again (see [CHANGELOG.md](CHANGELOG.md)
+for what changed); remove with `herdr plugin uninstall tferreira.herdr-pr-ops`.
 
 ## Keys
 

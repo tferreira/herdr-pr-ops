@@ -160,7 +160,14 @@ optional and changes apply on the next scan.
 | `pollSeconds` | `180` | scan interval |
 | `agentKind` | `claude` | any [Herdr agent kind](https://herdr.dev) |
 | `glyphs` | `auto` | `font` uses [herdr-radar](https://github.com/hhdebb/herdr-radar)'s icon font and Nerd Font icons, `text` plain Unicode, `auto` picks `font` when herdr-radar is installed |
-| `prompts.*` | plain-language prompts | point them at your own skills or slash commands. PR prompts get `{url}` `{urls}` `{repo}` `{number}`, task prompts `{id}` `{url}` `{urlNote}` |
+| `prompts.*` | plain-language prompts, no skills needed | point them at your own skills or slash commands. PR prompts get `{url}` `{urls}` `{repo}` `{number}`, task prompts `{id}` `{url}` `{urlNote}` |
+
+The default prompts are plain instructions any agent can follow: reviews and
+re-checks work through `gh`, ships follow the release process the agent finds
+in the repo (README, CONTRIBUTING, CLAUDE.md, CI config) and always ask before
+merging, and tickets use the agent's YouTrack or Sentry tools (MCP) or ask you
+to paste the ticket. If you have skills or slash commands for these, point the
+prompts at them, e.g. `"review": "/my-review {url}"`.
 
 YouTrack and Sentry short IDs look alike (`PROJ-123`, `API-1A`). A prefix that
 matches a repo name or a `sentryProjects` key is read as Sentry, otherwise

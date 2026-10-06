@@ -10,6 +10,9 @@ board, keys and config can still change between minor versions.
   clone folders under `~`, and the Jira, Linear or YouTrack URL your coding
   agent is connected to; `enter` saves them to `config.json`. The `setup`
   action reruns it.
+- The install binds the board to `prefix+d` (or `prefix+alt+d`) in a marked
+  block of Herdr's `config.toml`; `keybinding` and `remove-keybinding`
+  actions.
 
 ## 0.2.0 - 2026-10-06
 

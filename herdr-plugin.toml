@@ -7,6 +7,11 @@ platforms = ["macos", "linux"]
 
 # Needs Node 18+ and an authenticated `gh` on PATH. No npm dependencies.
 
+# On install: bind the board to prefix+d (prefix+alt+d if taken) in a marked
+# block of Herdr's config.toml, unless it is already bound. Never fails.
+[[build]]
+command = ["node", "bin/configure.js", "--apply"]
+
 [[panes]]
 id = "board"
 title = "PR//OPS"
@@ -34,6 +39,18 @@ id = "open"
 title = "Open PR//OPS"
 description = "Open the pull request dashboard."
 command = ["node", "bin/open.js"]
+
+[[actions]]
+id = "keybinding"
+title = "Bind PR//OPS to a key"
+description = "Add the prefix+d binding (prefix+alt+d if taken) to Herdr's config.toml."
+command = ["node", "bin/configure.js", "--apply"]
+
+[[actions]]
+id = "remove-keybinding"
+title = "Remove the PR//OPS key binding"
+description = "Take the managed binding out of Herdr's config.toml, e.g. before uninstalling."
+command = ["node", "bin/configure.js", "--remove"]
 
 [[actions]]
 id = "setup"

@@ -13,6 +13,12 @@ board, keys and config can still change between minor versions.
 - `open-remote` action for screens attached with `herdr --remote`: bind it
   in that machine's config.toml to get links copied to its clipboard and
   plain-text icons, while the server machine keeps the normal board.
+- `m` toggles remote-screen mode from the board (remembered), so attaching
+  from another machine needs no config there.
+
+### Fixed
+- Stopping (`x`) the agent whose tab the board was opened from closed the
+  board too (Herdr closes a popup with its tab); the board now reopens.
 
 ## 0.4.3 - 2026-10-06
 

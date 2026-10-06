@@ -124,6 +124,7 @@ for what changed); remove with the `remove-keybinding` action, then
 | `/` | filter by repo, title or author |
 | `R`, `F5` | full rescan |
 | `,` | settings: edit `config.json` in `$EDITOR` |
+| `m` | screen mode: remote screen (`herdr --remote`) / this screen |
 | `?` | help |
 | `q`, `esc` | close |
 
@@ -250,12 +251,14 @@ draws the board.
   remote, when the board runs over SSH or on a machine without a display.
   The detection reads the SSH environment of the Herdr server; if your
   remote server was started outside SSH, set `"openLinks": "copy"` there.
-- With `--remote`, Herdr uses the key bindings of the machine you sit at.
-  That makes a per-screen setup possible: on the machine you attach from,
-  bind the `open-remote` action instead of `open`. It opens the same board
-  with the `remote` settings (links copied to that screen's clipboard,
-  plain-text icons for terminals without herdr-radar's font), and the board
-  shows `⇄ REMOTE SCREEN`:
+- The board cannot tell which screen is looking at it, so it has a screen
+  mode: press `m` on the machine you attach from to switch to **remote
+  screen** (links copied to that screen's clipboard, plain-text icons for
+  terminals without herdr-radar's font; the header shows `⇄ REMOTE SCREEN`),
+  and `m` again when you are back at the server machine. It is remembered.
+- Or, to never press `m`: with `--remote`, Herdr uses the key bindings of
+  the machine you sit at, so binding the `open-remote` action there opens
+  the board in remote-screen mode every time:
 
   ```toml
   # config.toml on the machine you attach from
@@ -267,8 +270,8 @@ draws the board.
   description = "PR//OPS"
   ```
 
-  Change those settings with `"remote": { "openLinks": "copy", "glyphs": "text" }`
-  in the server's config.
+- Change what remote-screen mode does with
+  `"remote": { "openLinks": "copy", "glyphs": "text" }` in the config.
 
 ## Rules worth knowing
 

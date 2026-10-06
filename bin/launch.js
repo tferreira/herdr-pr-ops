@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 "use strict";
 
-// launch.js <review|recheck|address|deploy> <pr-url> [<pr-url>...] [--pane <id>]
+// launch.js <review|recheck|status|address|deploy> <pr-url> [<pr-url>...] [--pane <id>]
 //   several urls: deploy only, one repo. --pane: an agent already on the PR
 //   (picked by the dashboard), prompted instead of starting a new one when idle.
 // launch.js task '{"kind":"youtrack","id":"PROJ-123","url":null,"repoPath":"/.../api"}'
@@ -238,7 +238,7 @@ async function main() {
   if (missing.length) throw new Error(`PR not in cache: ${missing.join(" ")}`);
   if (new Set(prs.map((p) => p.repo)).size > 1) throw new Error("one launch per repo");
   const pr = prs[0];
-  const slot = kind === "deploy" ? "deploy" : kind === "address" ? "work" : "review";
+  const slot = kind === "deploy" ? "deploy" : kind === "address" || kind === "status" ? "work" : "review";
   const agents = readJSON(paths.agents, {});
   const known = agents[url] && agents[url][slot];
 
@@ -253,7 +253,8 @@ async function main() {
   }
 
   setStatus("starting", "opening pane");
-  const pane = kind === "deploy" ? deployPane(prs) : kind === "address" ? addressPane(pr) : reviewPane(pr);
+  const pane =
+    kind === "deploy" ? deployPane(prs) : kind === "address" || kind === "status" ? addressPane(pr) : reviewPane(pr);
   setStatus("starting", "starting agent");
   await startAgent(agentName(prs), pane);
 

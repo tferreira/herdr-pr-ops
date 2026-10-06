@@ -293,7 +293,7 @@ function launch(kind, prs, reusePane) {
     env: process.env,
   });
   child.unref();
-  const verb = { review: "REVIEW", recheck: "RE-CHECK", address: "ADDRESS COMMENTS", deploy: "DEPLOY" }[kind];
+  const verb = { review: "REVIEW", recheck: "RE-CHECK", status: "STATUS CHECK", address: "ADDRESS COMMENTS", deploy: "DEPLOY" }[kind];
   say(`▲ ${verb} LAUNCHING · ${names}`, C.magenta);
 }
 
@@ -657,12 +657,16 @@ function footerLines(sel, W, base) {
     S(`${k}`, { fg: on ? C.bg : C.dim, bg: on ? C.cyan : C.line, bold: true }) + S(` ${label}  `, { fg: on ? C.text : C.dim, bg: C.bg });
   const keys =
     S(" ", { bg: C.bg }) +
+    (sel
+      ? agentFor(sel.pr)
+        ? key(" ↵ ", "JUMP")
+        : key(" ↵ ", enterAction(sel.pr).label, !!enterAction(sel.pr).kind)
+      : "") +
     (ui.tab === "review"
       ? key(" r ", "REVIEW") + key(" c ", "RE-CHECK")
-      : key(" c ", "ADDRESS") +
+      : key(" c ", "FIX") +
         key(" d ", marked.length ? `DEPLOY ${marked.length}` : "DEPLOY", marked.length > 0 || (sel && canDeploy(sel.pr) === true)) +
         key(" ␣ ", "MARK", !!(sel && canDeploy(sel.pr) === true))) +
-    key(" ↵ ", "JUMP", !!(sel && agentFor(sel.pr))) +
     key(" o ", "OPEN") +
     key(" f ", "FILES") +
     key(" z ", "SNOOZE") +
@@ -682,10 +686,10 @@ function overlayHelp(out, W, H) {
     ["←→ ↑↓", "move between columns / PRs (hjkl too)"],
     ["tab  1 2", "switch MINE / TO REVIEW"],
     ["r", "review: new agent pane in a PR worktree (prompts.review)"],
-    ["c", "comments: re-check others' PRs / address the ones on mine"],
+    ["c", "comments: re-check others' PRs / get mine ready (fix, draft replies)"],
     ["d", "deploy: prompts.deploy (approved, CI green, no conflict)"],
     ["space", "mark for a multi-deploy (alt+click too); d ships all"],
-    ["enter", "jump to the PR's agent pane"],
+    ["enter", "jump to the PR's agent; none yet: review / re-check / status report"],
     ["o / f", "open PR / files changed in the browser"],
     ["y", "copy PR url"],
     ["z / s", "snooze until the PR changes / show snoozed"],
@@ -835,6 +839,15 @@ function overlayTask(out, W, H) {
 }
 
 // ── actions ────────────────────────────────────────────────────────────────
+// What enter does on a card without an agent: review new PRs, re-check
+// those with news since my review, a report-only status check on mine.
+function enterAction(pr) {
+  if (pr.tab === "mine") return { kind: "status", label: "CHECK" };
+  if (pr.col === 0) return { kind: "review", label: "REVIEW" };
+  if (pr.col === 1) return { kind: "recheck", label: "RE-CHECK" };
+  return { kind: null, label: "WAIT", why: "WAITING ON AUTHOR · NOTHING NEW SINCE YOUR REVIEW" };
+}
+
 function canDeploy(pr) {
   if (pr.tab !== "mine") return "deploy is for your own PRs";
   if (pr.reviewDecision !== "APPROVED") return "not approved yet";
@@ -1026,9 +1039,15 @@ function onKey(k) {
     }
     case "\r": {
       const ag = agentFor(pr);
-      if (!ag) return say(pr.tab === "review" ? "NO AGENT YET · r TO REVIEW" : "NO AGENT ON THIS PR", C.amber);
-      if (DEMO) return say(`DEMO MODE · WOULD JUMP TO ${ag.pane_id}`, C.violet);
-      return quit(ag.pane_id);
+      if (ag) {
+        if (DEMO) return say(`DEMO MODE · WOULD JUMP TO ${ag.pane_id}`, C.violet);
+        return quit(ag.pane_id);
+      }
+      const act = enterAction(pr);
+      if (!act.kind) return say(act.why, C.blue);
+      const L = launches[pr.url];
+      if (L && L.state === "starting") return say("ALREADY LAUNCHING", C.amber);
+      return launch(act.kind, pr);
     }
     case "o":
       openUrl(pr.url);

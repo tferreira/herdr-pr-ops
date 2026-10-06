@@ -3,7 +3,7 @@
 Versions follow [semantic versioning](https://semver.org). Before 1.0 the
 board, keys and config can still change between minor versions.
 
-## Unreleased
+## 0.4.0 - 2026-10-06
 
 ### Added
 - `x` `x` stops the card's agent: closes its pane, or its tab when alone, and
@@ -20,6 +20,8 @@ board, keys and config can still change between minor versions.
 
 ### Fixed
 - Starting a task opened a tab but no agent ("branch is not defined").
+- A task's card vanished once its agent started (task records were matched
+  as PRs), and briefly showed twice while launching.
 
 ### Changed
 - Re-check only for signals meant for you: re-requested, replies in your

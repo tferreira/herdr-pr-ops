@@ -14,7 +14,6 @@ board, keys and config can still change between minor versions.
 - Merged, closed and approved-by-you PRs keep their card while an agent is
   on them (tagged, last column, up to a day), so deploys and reviews stay
   reachable from the board. "Merged" notification for your PRs.
-
 - Tasks show on the board as soon as they launch ("starting agent"), and a
   failed launch stays as a card with the reason; `enter` retries.
 

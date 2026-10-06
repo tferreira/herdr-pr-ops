@@ -239,6 +239,10 @@ name or a `sentryProjects` key reads as a Sentry short ID. Each tracker uses
   last push, comment or review. Bots are ignored.
 - **CircleCI approval jobs** waiting "on hold" count as passing CI.
 - PRs you approved leave To review unless you are re-requested.
+- A PR that leaves the lists (merged, closed, or approved by you) keeps its
+  card in the last column, tagged `⛙ MERGED`, `✕ CLOSED` or `✓ YOU APPROVED`,
+  while an agent is on it, so you can follow a deploy or a review to the end.
+  It goes when the agent's pane closes, at most a day later.
 
 ## Development
 

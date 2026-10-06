@@ -3,6 +3,14 @@
 Versions follow [semantic versioning](https://semver.org). Before 1.0 the
 board, keys and config can still change between minor versions.
 
+## Unreleased
+
+### Added
+- First-run setup screen: detects your orgs (from PRs you were involved in),
+  clone folders under `~`, and the Jira, Linear or YouTrack URL your coding
+  agent is connected to; `enter` saves them to `config.json`. The `setup`
+  action reruns it.
+
 ## 0.2.0 - 2026-10-06
 
 ### Added

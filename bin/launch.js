@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 "use strict";
 
-// launch.js <review|recheck|deploy> <pr-url>
+// launch.js <review|recheck|deploy> <pr-url> [<pr-url>...]   (several: deploy only, one repo)
 // launch.js task '{"kind":"youtrack","id":"PROJ-123","url":null,"repoPath":"/.../api"}'
 //
 // Starts (or reuses) a Claude pane for a PR. Reviews run in a Herdr worktree
@@ -11,26 +11,34 @@
 
 const { paths, readJSON, writeJSON, config, log, herdr, sh, localRepoPath, HOME, fill } = require("../lib/util");
 
-const [kind, arg] = process.argv.slice(2);
+const [kind, arg, ...more] = process.argv.slice(2);
 const task = kind === "task" ? JSON.parse(arg) : null;
-// launches.json / agents.json key: the PR url, or task:<ticket id>.
-const url = task ? `task:${task.id}` : arg;
+// launches.json / agents.json keys: the PR urls, or task:<ticket id>.
+const keys = task ? [`task:${task.id}`] : [arg, ...more];
+const url = keys[0];
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 function setStatus(state, msg = "") {
   const all = readJSON(paths.launches, {});
-  if (state === "done") delete all[url];
-  else all[url] = { kind, state, msg, at: new Date().toISOString() };
+  for (const k of keys) {
+    if (state === "done") delete all[k];
+    else all[k] = { kind, state, msg, at: new Date().toISOString() };
+  }
   writeJSON(paths.launches, all);
 }
 
-function prompts(pr) {
-  return fill(config().prompts[kind], { url: pr.url, repo: pr.repo, number: pr.number });
+// {url} and {urls} both take every PR url (space separated) so a one-PR
+// template like "/deploy {url}" also works for a multi-PR deploy.
+function prompts(prs) {
+  const urls = prs.map((p) => p.url).join(" ");
+  const numbers = prs.map((p) => p.number).join(" ");
+  return fill(config().prompts[kind], { url: urls, urls, repo: prs[0].repo, number: numbers, numbers });
 }
 
-function agentName(pr) {
+function agentName(prs) {
+  const pr = { ...prs[0], number: prs.map((p) => p.number).join("-") };
   const prefix = kind === "deploy" ? "deploy" : "pr";
-  const room = 32 - prefix.length - String(pr.number).length - 2;
+  const room = Math.max(3, 32 - prefix.length - String(pr.number).length - 2);
   const repo = pr.repoName.toLowerCase().replace(/[^a-z0-9_-]/g, "-").slice(0, room);
   return `${prefix}-${repo}-${pr.number}`;
 }
@@ -91,9 +99,10 @@ function reviewPane(pr) {
   return rootPane(herdr(["worktree", "open", "--cwd", repo, "--branch", branch, "--label", label, "--no-focus"]));
 }
 
-function deployPane(pr) {
+function deployPane(prs) {
+  const pr = prs[0];
   const repo = localRepoPath(pr.repo) || HOME;
-  const label = `deploy #${pr.number}`;
+  const label = `deploy ${prs.map((p) => `#${p.number}`).join(" ")}`;
   let ws = null;
   try {
     const main = (herdr(["worktree", "list", "--cwd", repo]).worktrees || []).find((w) => !w.is_linked_worktree);
@@ -182,38 +191,41 @@ async function runTask(t) {
 async function main() {
   if (task) return runTask(task);
   const cache = readJSON(paths.cache, { prs: [] });
-  const pr = cache.prs.find((p) => p.url === url);
-  if (!pr) throw new Error(`PR not in cache: ${url}`);
+  const prs = keys.map((k) => cache.prs.find((p) => p.url === k));
+  const missing = keys.filter((k, i) => !prs[i]);
+  if (missing.length) throw new Error(`PR not in cache: ${missing.join(" ")}`);
+  if (new Set(prs.map((p) => p.repo)).size > 1) throw new Error("one launch per repo");
+  const pr = prs[0];
   const slot = kind === "deploy" ? "deploy" : "review";
   const agents = readJSON(paths.agents, {});
   const known = agents[url] && agents[url][slot];
 
-  const live = liveAgent(known);
+  const live = keys.length === 1 ? liveAgent(known) : null;
   if (live) {
     if (!["idle", "done"].includes(live.agent_status)) {
       throw new Error(`agent is ${live.agent_status}, press enter to go to it`);
     }
-    herdr(["agent", "prompt", live.pane_id, prompts(pr)]);
+    herdr(["agent", "prompt", live.pane_id, prompts(prs)]);
     setStatus("done");
     return;
   }
 
   setStatus("starting", "opening pane");
-  const pane = kind === "deploy" ? deployPane(pr) : reviewPane(pr);
+  const pane = kind === "deploy" ? deployPane(prs) : reviewPane(pr);
   setStatus("starting", "starting agent");
-  await startAgent(agentName(pr), pane);
+  await startAgent(agentName(prs), pane);
 
   const fresh = readJSON(paths.agents, {});
-  fresh[url] = { ...(fresh[url] || {}), [slot]: pane };
+  for (const k of keys) fresh[k] = { ...(fresh[k] || {}), [slot]: pane };
   writeJSON(paths.agents, fresh);
 
-  herdr(["agent", "prompt", pane, prompts(pr)]);
+  herdr(["agent", "prompt", pane, prompts(prs)]);
   setStatus("done");
-  log(`${kind} started for ${url} in ${pane}`);
+  log(`${kind} started for ${keys.join(" ")} in ${pane}`);
 }
 
 main().catch((e) => {
-  log(`${kind} ${url} failed:`, e.message);
+  log(`${kind} ${keys.join(" ")} failed:`, e.message);
   setStatus("error", e.message.split("\n")[0].slice(0, 200));
   try {
     herdr(["notification", "show", `${kind} failed`, "--body", e.message.slice(0, 200), "--sound", "none"]);

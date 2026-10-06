@@ -87,7 +87,8 @@ opens the board with fake data; nothing is fetched or launched.
 | `tab`, `1`, `2` | switch Mine / To review |
 | `r` | review: new agent in a worktree at the PR head |
 | `c` | re-check: were your comments addressed? Reuses the review agent when it is still open |
-| `d` | ship an approved PR (CI green, nothing to answer, no conflict) |
+| `d` | ship an approved PR (CI green, nothing to answer, no conflict), or every marked PR |
+| `space` | mark a ready PR for a multi-ship; marks are numbered in shipping order, `esc` clears them |
 | `enter` | jump to the PR's agent |
 | `o` / `f` | open the PR / its changed files in the browser |
 | `y` | copy the PR URL |
@@ -99,7 +100,9 @@ opens the board with fake data; nothing is fetched or launched.
 | `?` | help |
 | `q`, `esc` | close |
 
-The bottom bar always shows the keys that apply to the selected PR.
+The mouse works too: click a card or a tab to select it, ctrl+click a card to
+mark it, scroll with the wheel. The bottom bar always shows the keys that apply
+to the selected PR.
 
 ## How agents are started
 
@@ -107,7 +110,9 @@ The bottom bar always shows the keys that apply to the selected PR.
   open it as a Herdr worktree next to your clone (`<clone>-pr<N>`), so your
   own checkout is never touched. A re-check moves a clean review worktree to
   the new head and reuses the agent if it is still open.
-- **Ships** (`d`) open a tab in the repo's workspace.
+- **Ships** (`d`) open a tab in the repo's workspace. Marked PRs ship
+  together: one agent per repo, given all of that repo's PRs in marking order
+  (`{url}` and `{urls}` hold the space-separated URLs).
 - **Tasks** (`n`) create a worktree on a branch named after the ticket, from
   the remote default branch, and ask the agent for a plan before any code.
   Ctrl+click a YouTrack or Sentry issue link in any Herdr pane to open the
@@ -155,7 +160,7 @@ optional and changes apply on the next scan.
 | `pollSeconds` | `180` | scan interval |
 | `agentKind` | `claude` | any [Herdr agent kind](https://herdr.dev) |
 | `glyphs` | `auto` | `font` uses [herdr-radar](https://github.com/hhdebb/herdr-radar)'s icon font and Nerd Font icons, `text` plain Unicode, `auto` picks `font` when herdr-radar is installed |
-| `prompts.*` | plain-language prompts | point them at your own skills or slash commands. PR prompts get `{url}` `{repo}` `{number}`, task prompts `{id}` `{url}` `{urlNote}` |
+| `prompts.*` | plain-language prompts | point them at your own skills or slash commands. PR prompts get `{url}` `{urls}` `{repo}` `{number}`, task prompts `{id}` `{url}` `{urlNote}` |
 
 YouTrack and Sentry short IDs look alike (`PROJ-123`, `API-1A`). A prefix that
 matches a repo name or a `sentryProjects` key is read as Sentry, otherwise

@@ -208,6 +208,7 @@ optional and changes apply on the next scan.
 | `repoRoots` | `~/code`, `~/src`, `~/projects`, `~/repos`, `~/git`, `~/dev` | where clones live |
 | `repos` | | explicit `owner/name` → path |
 | `pollSeconds` | `180` | scan interval |
+| `openLinks` | `auto` | `o` / `f`: `browser`, `copy` (OSC 52 to your terminal's clipboard), or `auto` (copy over SSH or without a display) |
 | `agentKind` | `claude` | any [Herdr agent kind](https://herdr.dev) |
 | `glyphs` | `auto` | `font` uses [herdr-radar](https://github.com/hhdebb/herdr-radar)'s icon font and Nerd Font icons, `text` plain Unicode, `auto` picks `font` when herdr-radar is installed |
 | `prompts.*` | plain-language prompts, no skills needed | point them at your own skills or slash commands. PR prompts get `{url}` `{urls}` `{repo}` `{number}`, task prompts `{id}` `{url}` `{urlNote}` |
@@ -236,6 +237,21 @@ the task box cycles through the alternatives. A key whose prefix is a repo
 name or a `sentryProjects` key reads as a Sentry short ID. Each tracker uses
 `prompts.<name>` when set, else `prompts.ticket` (`{label}`, `{id}`, `{url}`,
 `{urlNote}`).
+
+## Remote machines (`herdr --remote`)
+
+Plugins run where the Herdr server runs, so install PR//OPS (and Node, `gh`,
+your clones and your agent) on the remote machine; your local terminal only
+draws the board.
+
+- `y` copies through the terminal (OSC 52), so the URL lands on the
+  clipboard of the machine you are sitting at. Herdr passes it through.
+- `o` / `f` copy the link the same way instead of opening a browser on the
+  remote, when the board runs over SSH or on a machine without a display.
+  The detection reads the SSH environment of the Herdr server; if your
+  remote server was started outside SSH, set `"openLinks": "copy"` there.
+- With `--remote`, Herdr uses your local key bindings unless you pass
+  `--remote-keybindings server`; if `prefix+d` does nothing, use that.
 
 ## Rules worth knowing
 

@@ -50,6 +50,9 @@ const TABS = [
 ];
 
 const SPIN = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏";
+// Mouse reporting: button events, SGR encoding.
+const MOUSE_ON = "\x1b[?1000h\x1b[?1006h";
+const MOUSE_OFF = "\x1b[?1000l\x1b[?1006l";
 const SWEEP = "◜◝◞◟";
 let LANE_W = 16; // sized to the longest repo name each frame
 let CARD_H = 3; // 4 when columns are narrow and titles wrap to two lines
@@ -73,6 +76,8 @@ let help = false;
 let toast = null; // { text, color, until }
 let scroll = 0;
 let lastLines = [];
+// Where things were drawn last frame, for mouse clicks (1-based rows/cols).
+let hit = { tabs: [], cards: [] };
 // --snapshot <cols>x<rows> [mine|review]: print one settled frame and exit.
 const SNAP = process.argv.includes("--snapshot") ? process.argv.slice(process.argv.indexOf("--snapshot") + 1) : null;
 const boot = SNAP ? Date.now() - 5000 : Date.now();
@@ -251,6 +256,7 @@ function pollFiles() {
       cacheMtime = m;
       data = U.readJSON(U.paths.cache, data) || data;
       if (!data.prs) data.prs = [];
+      pruneMarks();
     }
   } catch {}
   launches = U.readJSON(U.paths.launches, {});
@@ -270,20 +276,64 @@ function refresh(full = false) {
   if (full) say("◎ FULL SCAN", C.cyan, 1500);
 }
 
-function launch(kind, pr) {
-  if (DEMO) return say(`DEMO MODE · WOULD ${kind.toUpperCase()} ${pr.repoName}#${pr.number}`, C.violet);
+// One agent for `prs` (several only for deploy, all from one repo).
+function launch(kind, prs) {
+  if (!Array.isArray(prs)) prs = [prs];
+  const names = prs.map((p) => `${p.repoName}#${p.number}`).join(" ");
+  if (DEMO) return say(`DEMO MODE · WOULD ${kind.toUpperCase()} ${names}`, C.violet);
   const all = U.readJSON(U.paths.launches, {});
-  all[pr.url] = { kind, state: "starting", msg: "queued", at: new Date().toISOString() };
+  for (const p of prs) all[p.url] = { kind, state: "starting", msg: "queued", at: new Date().toISOString() };
   U.writeJSON(U.paths.launches, all);
   launches = all;
-  const child = spawn(process.execPath, [path.join(__dirname, "launch.js"), kind, pr.url], {
+  const child = spawn(process.execPath, [path.join(__dirname, "launch.js"), kind, ...prs.map((p) => p.url)], {
     detached: true,
     stdio: "ignore",
     env: process.env,
   });
   child.unref();
   const verb = { review: "REVIEW", recheck: "RE-CHECK", deploy: "DEPLOY" }[kind];
-  say(`▲ ${verb} LAUNCHING · ${pr.repoName}#${pr.number}`, C.magenta);
+  say(`▲ ${verb} LAUNCHING · ${names}`, C.magenta);
+}
+
+// Marked PRs for a multi-deploy, in the order they were marked.
+let marked = [];
+
+function toggleMark(pr) {
+  if (pr.tab !== "mine") return say("MARKING IS FOR DEPLOYS · MINE TAB", C.amber);
+  const i = marked.indexOf(pr.url);
+  if (i >= 0) {
+    marked.splice(i, 1);
+    return say(`☐ UNMARKED · ${marked.length} MARKED`, C.violet, 1500);
+  }
+  const ok = canDeploy(pr);
+  if (ok !== true) return say(`CAN'T MARK · ${ok.toUpperCase()}`, C.red);
+  marked.push(pr.url);
+  say(`☑ MARKED ${marked.length} · d DEPLOYS ALL`, C.magenta, 1500);
+}
+
+// Drop marks whose PR left the board or stopped being shippable.
+function pruneMarks() {
+  marked = marked.filter((u) => {
+    const pr = data.prs.find((p) => p.url === u);
+    return pr && canDeploy(pr) === true;
+  });
+}
+
+// One launch per repo, PRs in marking order.
+function deployMarked() {
+  const groups = new Map();
+  for (const u of marked) {
+    const pr = data.prs.find((p) => p.url === u);
+    if (!groups.has(pr.repo)) groups.set(pr.repo, []);
+    groups.get(pr.repo).push(pr);
+  }
+  for (const prs of groups.values()) launch("deploy", prs);
+  const names = marked.map((u) => {
+    const p = data.prs.find((x) => x.url === u);
+    return `${p.repoName}#${p.number}`;
+  });
+  say(`${DEMO ? "DEMO MODE · WOULD DEPLOY" : "▲ DEPLOY LAUNCHING ·"} ${names.join(" ")}${groups.size > 1 ? ` · ${groups.size} AGENTS` : ""}`, DEMO ? C.violet : C.magenta, 4000);
+  marked = [];
 }
 
 // Header line: what the agents on board PRs are doing.
@@ -337,7 +387,8 @@ function chips(pr, bg) {
 function card(pr, w, isSel, laneCol) {
   const draft = pr.isDraft;
   const bg = isSel ? C.sel : draft ? C.bg : C.card;
-  const border = isSel ? pulse(C.cyan, "#7af3ff", 1600) : draft ? C.dim : C.grid;
+  const mark = marked.indexOf(pr.url);
+  const border = isSel ? pulse(C.cyan, "#7af3ff", 1600) : mark >= 0 ? C.magenta : draft ? C.dim : C.grid;
   // Drafts get a dashed frame, a dim title and GitHub's grey draft icon.
   const [tl, tr, bl, br, h, v] = isSel
     ? draft
@@ -354,6 +405,7 @@ function card(pr, w, isSel, laneCol) {
   const prIcon = draft ? (font ? "\uf4dd" : "◌") : font ? "\uf407" : "●";
   const num =
     S(isSel ? "▶ " : "", { fg: C.white, bg, bold: true }) +
+    (mark >= 0 ? S(`☑${mark + 1} `, { fg: C.magenta, bg, bold: true }) : "") +
     S(prIcon + " ", { fg: draft ? C.mute : C.green, bg, bold: true }) +
     S(`#${pr.number}`, { fg: isSel ? C.white : draft ? C.mute : laneCol, bg, bold: true });
   const badge = agentBadge(pr, bg);
@@ -436,12 +488,15 @@ function render() {
 
   // tabs ──
   let tabs = S(" ", { bg: C.bg });
+  const tabHits = [];
   for (const t of TABS) {
     const active = ui.tab === t.id;
     const n = String(counts[t.id]).padStart(2, "0");
+    const x0 = width(tabs) + 1;
     tabs += active
       ? S("◢", { fg: C.cyan, bg: C.bg }) + S(` ${t.title} ${n} `, { fg: C.bg, bg: C.cyan, bold: true }) + S("◣", { fg: C.cyan, bg: C.bg })
       : S(` ${t.title} `, { fg: C.dim, bg: C.bg }) + S(n, { fg: C.mute, bg: C.bg }) + S(" ", { bg: C.bg });
+    tabHits.push({ id: t.id, x0, x1: width(tabs), y: out.length + 1 });
     tabs += S("  ", { bg: C.bg });
   }
   if (filterMode || filter) {
@@ -481,6 +536,7 @@ function render() {
 
   // body ──
   const body = [];
+  const cardHits = [];
   let selRange = [0, 0];
   lanes.forEach((lane, li) => {
     const rows = Math.max(1, ...lane.cols.map((c) => c.length));
@@ -502,6 +558,7 @@ function render() {
         }
         const isSel = sel && sel.pr.url === pr.url;
         if (isSel && sub === 0) selRange = [body.length, body.length + CARD_H];
+        if (sub === 0) cardHits.push({ url: pr.url, col: c, row: body.length, x0: LANE_W + c * colW + 1, x1: LANE_W + (c + 1) * colW - 1 });
         // Cards build in left to right on open.
         const appear = Date.now() - boot > 120 + c * 90 + li * 40;
         s += appear ? card(pr, colW - 1, isSel, lane.color)[sub] + S(" ", { bg: C.bg }) : S(" ".repeat(colW), { bg: C.bg });
@@ -533,6 +590,13 @@ function render() {
   if (selRange[0] < scroll) scroll = selRange[0];
   scroll = Math.max(0, Math.min(scroll, Math.max(0, body.length - bodyH)));
   const view = body.slice(scroll, scroll + bodyH);
+  const top = out.length + 1;
+  hit = {
+    tabs: tabHits,
+    cards: cardHits
+      .map((h) => ({ ...h, y0: top + h.row - scroll, y1: top + h.row - scroll + CARD_H - 1 }))
+      .filter((h) => h.y1 >= top && h.y0 < top + bodyH),
+  };
   while (view.length < bodyH) view.push(line(""));
   // Scroll hints sit in the right margin, over the line's last cells.
   const hint = (l, ch) => fit(l, W - 2, base) + S(ch, { fg: C.cyan, bg: C.bg, bold: true }) + S(" ", { bg: C.bg });
@@ -591,7 +655,10 @@ function footerLines(sel, W, base) {
     S(`${k}`, { fg: on ? C.bg : C.dim, bg: on ? C.cyan : C.line, bold: true }) + S(` ${label}  `, { fg: on ? C.text : C.dim, bg: C.bg });
   const keys =
     S(" ", { bg: C.bg }) +
-    (ui.tab === "review" ? key(" r ", "REVIEW") + key(" c ", "RE-CHECK") : key(" d ", "DEPLOY", sel && canDeploy(sel.pr) === true)) +
+    (ui.tab === "review"
+      ? key(" r ", "REVIEW") + key(" c ", "RE-CHECK")
+      : key(" d ", marked.length ? `DEPLOY ${marked.length}` : "DEPLOY", marked.length > 0 || (sel && canDeploy(sel.pr) === true)) +
+        key(" ␣ ", "MARK", !!(sel && canDeploy(sel.pr) === true))) +
     key(" ↵ ", "JUMP", !!(sel && agentFor(sel.pr))) +
     key(" o ", "OPEN") +
     key(" f ", "FILES") +
@@ -614,6 +681,8 @@ function overlayHelp(out, W, H) {
     ["r", "review: new agent pane in a PR worktree (prompts.review)"],
     ["c", "re-check: were my comments addressed? reuses the review agent"],
     ["d", "deploy: prompts.deploy (approved, CI green, no conflict)"],
+    ["space", "mark for a multi-deploy (ctrl+click too); d ships all"],
+    ["click", "select a card or a tab; wheel scrolls"],
     ["enter", "jump to the PR's agent pane"],
     ["o / f", "open PR / files changed in the browser"],
     ["y", "copy PR url"],
@@ -783,9 +852,9 @@ function editConfig() {
   }
   const editor = process.env.VISUAL || process.env.EDITOR || "vi";
   process.stdin.setRawMode(false);
-  process.stdout.write(`${ESC}0m${ESC}?25h${ESC}?1049l`);
+  process.stdout.write(`${MOUSE_OFF}${ESC}0m${ESC}?25h${ESC}?1049l`);
   spawnSync("/bin/sh", ["-c", `${editor} "$0"`, U.paths.config], { stdio: "inherit" });
-  process.stdout.write(`${ESC}?1049h${ESC}?25l${ESC}2J`);
+  process.stdout.write(`${ESC}?1049h${ESC}?25l${ESC}2J${MOUSE_ON}`);
   process.stdin.setRawMode(true);
   lastLines = [];
   try {
@@ -817,7 +886,7 @@ function copy(text) {
 
 function quit(after) {
   saveUi();
-  process.stdout.write(`${ESC}0m${ESC}?25h${ESC}?1049l`);
+  process.stdout.write(`${MOUSE_OFF}${ESC}0m${ESC}?25h${ESC}?1049l`);
   if (after) {
     // The popup closes when this process exits, so focus from a detached
     // child once it is gone.
@@ -827,7 +896,29 @@ function quit(after) {
   process.exit(0);
 }
 
+// SGR mouse: click selects a card or a tab, ctrl+click marks for deploy,
+// the wheel moves through the column.
+function onMouse(k) {
+  const m = k.match(/^\x1b\[<(\d+);(\d+);(\d+)([Mm])$/);
+  if (!m || m[4] !== "M" || task || help) return;
+  const [b, x, y] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  if (b & 64) return move(0, (b & 1) ? 1 : -1);
+  if ((b & 3) !== 0 || b & 32) return;
+  const tab = hit.tabs.find((t) => t.y === y && x >= t.x0 && x <= t.x1);
+  if (tab) {
+    ui.tab = tab.id;
+    scroll = 0;
+    return;
+  }
+  const c = hit.cards.find((h) => y >= h.y0 && y <= h.y1 && x >= h.x0 && x <= h.x1);
+  if (!c) return;
+  const pr = data.prs.find((p) => p.url === c.url);
+  ui.sel[ui.tab] = { url: c.url, col: c.col, pos: 0 };
+  if (b & 16 && pr) toggleMark(pr);
+}
+
 function onKey(k) {
+  if (k.startsWith("\x1b[<")) return onMouse(k);
   if (task) return taskKey(k);
   if (filterMode) {
     if (k === "\r" || k === "\x1b[A" || k === "\x1b[B") filterMode = false;
@@ -893,6 +984,10 @@ function onKey(k) {
         filter = "";
         return;
       }
+      if (k === "\x1b" && marked.length) {
+        marked = [];
+        return say("MARKS CLEARED", C.violet, 1500);
+      }
       return quit();
   }
   if (!pr) return;
@@ -906,7 +1001,14 @@ function onKey(k) {
       if (ag && !["idle", "done"].includes(ag.agent_status)) return say(`AGENT IS ${ag.agent_status.toUpperCase()} · ↵ TO JUMP`, C.amber);
       return launch(k === "r" ? "review" : "recheck", pr);
     }
+    case " ":
+      return toggleMark(pr);
     case "d": {
+      if (marked.length) {
+        if (pr.tab !== "mine") return say("SWITCH TO MINE TO DEPLOY THE MARKED PRS", C.amber);
+        if (marked.some((u) => launches[u] && launches[u].state === "starting")) return say("ALREADY LAUNCHING", C.amber);
+        return deployMarked();
+      }
       const ok = canDeploy(pr);
       if (ok !== true) return say(`NO DEPLOY · ${ok.toUpperCase()}`, C.red);
       const L = launches[pr.url];
@@ -989,12 +1091,12 @@ function main() {
     console.error("dashboard needs a terminal");
     process.exit(1);
   }
-  process.stdout.write(`${ESC}?1049h${ESC}?25l${ESC}2J`);
+  process.stdout.write(`${ESC}?1049h${ESC}?25l${ESC}2J${MOUSE_ON}`);
   process.stdin.setRawMode(true);
   process.stdin.setEncoding("utf8");
   process.stdin.on("data", (buf) => {
     // A paste or fast typing can deliver several keys in one chunk.
-    const keys = buf.match(/\x1b\[[0-9;]*[~A-Za-z]|\x1bO[A-Z]|\x1b|[\s\S]/g) || [];
+    const keys = buf.match(/\x1b\[<[0-9;]*[Mm]|\x1b\[[0-9;]*[~A-Za-z]|\x1bO[A-Z]|\x1b|[\s\S]/g) || [];
     for (const k of keys) onKey(k);
     render();
   });

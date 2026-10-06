@@ -6,6 +6,8 @@ board, keys and config can still change between minor versions.
 ## Unreleased
 
 ### Added
+- `x` `x` stops the card's agent: closes its pane, or its tab when alone, and
+  removes a clean review worktree. The PR stays on the board.
 - Mine has an In progress column: tasks started with `n` and agents on a
   feature branch of your orgs' repos that has no PR yet, titled by the
   agent's own terminal title. `enter` jumps, `o` opens the ticket.

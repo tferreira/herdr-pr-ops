@@ -115,6 +115,7 @@ for what changed); remove with the `remove-keybinding` action, then
 | `c` | To review: were your comments addressed? Mine: get the PR ready (fix feedback, CI, conflicts; draft replies). Reuses an idle agent already on the PR |
 | `d` | ship an approved PR (CI green, nothing to answer, no conflict), or every marked PR |
 | `space`, alt+click | mark a ready PR for a multi-ship; marks are numbered in shipping order, `esc` clears them |
+| `x` `x` | stop the card's agent (press twice). The PR stays on the board; see below for what is cleaned up |
 | `enter` | jump to the PR's agent. No agent yet: review a new PR, re-check one with news since your review, or on your own PR a report-only status check (feedback, CI, conflicts). Does nothing on PRs waiting on their author |
 | `o` / `f` | open the PR / its changed files in the browser |
 | `y` | copy the PR URL |
@@ -142,6 +143,10 @@ selected PR; when `enter` does the same as `r` or `c`, they share a chip
   checkout of the PR's branch (fast-forwarded to origin when clean) or a new
   worktree of it. The status check only reports; the fix shows you
   everything before committing, pushing or posting.
+- **Stopping** (`x` twice) closes the agent's pane, or its tab when it is
+  the only pane (Herdr closes a workspace with its last tab). A clean review
+  worktree (`pr-<N>`) is removed too; its branch stays. Task and fix
+  worktrees hold your work and are never removed, nor are main clones.
 - **Ships** (`d`) open a tab in the repo's workspace. Marked PRs ship
   together: one agent per repo, given all of that repo's PRs in marking order
   (`{url}` and `{urls}` hold the space-separated URLs).
@@ -264,6 +269,7 @@ sh tools/screenshots.sh                            # regenerate assets/
 | `bin/launch.js` | worktrees, panes and agents |
 | `bin/open.js` | actions and startup hook |
 | `bin/configure.js` | the key binding in Herdr's config.toml |
+| `bin/stop.js` | stop an agent and tidy its tab or review worktree |
 | `lib/github.js` | GraphQL queries and column rules |
 | `lib/tickets.js` | trackers, ticket parsing, local repo discovery |
 | `lib/header.js` | the animated logo band |

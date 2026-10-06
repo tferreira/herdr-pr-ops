@@ -373,6 +373,26 @@ function launch(kind, prs, reusePane) {
   say(`▲ ${verb} LAUNCHING · ${names}`, C.magenta);
 }
 
+// x stops the card's agent: a first press arms, a second within 3 s fires.
+let stopArmed = null; // { pane, until }
+
+function stopAgent(pr) {
+  const ag = agentFor(pr);
+  if (!ag) return say("NO AGENT ON THIS CARD", C.amber);
+  if (!stopArmed || stopArmed.pane !== ag.pane_id || Date.now() > stopArmed.until) {
+    stopArmed = { pane: ag.pane_id, until: Date.now() + 3000 };
+    const what = ag.agent_status === "working" ? "WORKING " : "";
+    return say(`x AGAIN TO STOP THE ${what}AGENT IN ${ag.pane_id}`, C.red, 3000);
+  }
+  stopArmed = null;
+  if (DEMO) return say(`DEMO MODE · WOULD STOP ${ag.pane_id}`, C.violet);
+  spawn(process.execPath, [path.join(__dirname, "stop.js"), ag.pane_id], { detached: true, stdio: "ignore", env: process.env }).unref();
+  agents.delete(ag.pane_id);
+  links = linkAgents(agents, data.prs, agentMap);
+  work = buildWork();
+  say(`◼ AGENT STOPPED · ${ag.pane_id}`, C.magenta);
+}
+
 // Marked PRs for a multi-deploy, in the order they were marked.
 let marked = [];
 
@@ -745,12 +765,12 @@ function actionKeys(sel, key) {
   const pr = sel && sel.pr;
   if (pr && pr.work && pr.launchState === "error") return key(" ↵ ", "RETRY") + key(" o ", "TICKET", !!pr.ticketUrl);
   if (pr && pr.work && pr.launchState) return key(" ↵ ", "STARTING", false);
-  if (pr && pr.work) return key(" ↵ ", "JUMP") + key(" o ", pr.ticketUrl ? "TICKET" : "OPEN", !!pr.ticketUrl);
+  if (pr && pr.work) return key(" ↵ ", "JUMP") + key(" x ", "STOP") + key(" o ", pr.ticketUrl ? "TICKET" : "OPEN", !!pr.ticketUrl);
   const ag = pr && agentFor(pr);
   const act = pr && !ag ? enterAction(pr) : null;
   const enterIs = (kind) => act && act.kind === kind;
   let out = "";
-  if (ag) out += key(" ↵ ", "JUMP");
+  if (ag) out += key(" ↵ ", "JUMP") + key(" x ", "STOP");
   if (ui.tab === "review") {
     out += key(enterIs("review") ? " ↵ r " : " r ", "REVIEW");
     out += key(enterIs("recheck") ? " ↵ c " : " c ", "RE-CHECK");
@@ -837,6 +857,7 @@ function overlayHelp(out, W, H) {
     ["d", "deploy: prompts.deploy (approved, CI green, no conflict)"],
     ["space", "mark for a multi-deploy (alt+click too); d ships all"],
     ["enter", "jump to the PR's agent; none yet: review / re-check / status report"],
+    ["x x", "stop the card's agent (press twice); the PR stays"],
     ["o / f", "open PR / files changed in the browser"],
     ["y", "copy PR url"],
     ["z / s", "snooze until the PR changes / show snoozed"],
@@ -1400,6 +1421,7 @@ function onKey(k) {
       openUrl(pr.ticketUrl);
       return say("↗ TICKET OPENED", C.cyan, 1500);
     }
+    if (k === "x" && !pr.launchState) return stopAgent(pr);
     if ("rcdfz ".includes(k)) return say("NO PR YET · ↵ JUMPS TO THE AGENT", C.amber);
     return;
   }
@@ -1417,6 +1439,8 @@ function onKey(k) {
     }
     case " ":
       return toggleMark(pr);
+    case "x":
+      return stopAgent(pr);
     case "d": {
       if (marked.length) {
         if (pr.tab !== "mine") return say("SWITCH TO MINE TO DEPLOY THE MARKED PRS", C.amber);

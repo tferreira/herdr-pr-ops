@@ -3,6 +3,12 @@
 Versions follow [semantic versioning](https://semver.org). Before 1.0 the
 board, keys and config can still change between minor versions.
 
+## 0.4.2 - 2026-10-06
+
+### Fixed
+- New commits on a PR where your review request is still open (a comment-only
+  review keeps it open) now go to Re-check instead of Waiting.
+
 ## 0.4.1 - 2026-10-06
 
 ### Fixed

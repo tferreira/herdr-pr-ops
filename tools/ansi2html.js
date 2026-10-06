@@ -47,6 +47,10 @@ for (const tok of src.split(/(\x1b\[[0-9;?]*[A-Za-z])/)) {
   html += `<span style="${st.join(";")}">${esc(tok)}</span>`;
 }
 
+// NERD_FONT=<file.ttf>: use that font file instead of the installed one.
+const fontFace = process.env.NERD_FONT
+  ? `  @font-face { font-family: "Shot Nerd"; src: url("file://${process.env.NERD_FONT}"); }\n`
+  : "";
 process.stdout.write(`<!doctype html><html><head><meta charset="utf-8"><style>
   html, body { margin: 0; height: 100%; background: #05070d; }
   .stage { box-sizing: border-box; min-height: 100%; display: flex; align-items: center; justify-content: center;
@@ -57,7 +61,7 @@ process.stdout.write(`<!doctype html><html><head><meta charset="utf-8"><style>
          padding: 0 12px; gap: 8px; border-bottom: 1px solid #1a2440; }
   .dot { width: 12px; height: 12px; border-radius: 50%; }
   .t { flex: 1; text-align: center; color: #7385ab; font: 12px -apple-system, "Helvetica Neue", sans-serif; margin-right: 56px; }
-  pre { margin: 0; padding: 10px 12px 12px; font-family: "MesloLGM Nerd Font", "MesloLGM Nerd Font Mono", Menlo, monospace;
+${fontFace}  pre { margin: 0; padding: 10px 12px 12px; font-family: "Shot Nerd", "MesloLGM Nerd Font", "MesloLGM Nerd Font Mono", Menlo, monospace;
         font-size: 13px; line-height: normal; color: #c6d3ef; }
 </style></head><body><div class="stage"><div class="win">
   <div class="bar"><span class="dot" style="background:#ff5f57"></span><span class="dot" style="background:#febc2e"></span><span class="dot" style="background:#28c840"></span><span class="t">${esc(title)}</span></div>

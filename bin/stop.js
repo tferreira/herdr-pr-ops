@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 "use strict";
 
-// stop.js <pane-id>
+// stop.js <pane-id> [--reopen]
+//   --reopen: the board's popup sits on this pane's tab, and Herdr closes it
+//   with the tab; open it again afterwards.
 //
 // Stop an agent from the board without leaving empty layout behind:
 //   - the pane's tab holds other panes   -> close just the pane
@@ -16,6 +18,8 @@ const { paths, readJSON, writeJSON, log, herdr, sh } = require("../lib/util");
 const { checkoutInfo } = require("../lib/gitinfo");
 
 const pane = process.argv[2];
+const reopen = process.argv.includes("--reopen");
+const { PLUGIN_ID } = require("../lib/util");
 
 function forget() {
   const map = readJSON(paths.agents, {});
@@ -53,6 +57,15 @@ function main() {
 
 try {
   main();
+  if (reopen) {
+    setTimeout(() => {
+      try {
+        herdr(["plugin", "pane", "open", "--plugin", PLUGIN_ID, "--entrypoint", "board"]);
+      } catch (e) {
+        log("reopen failed:", e.message);
+      }
+    }, 400);
+  }
 } catch (e) {
   log(`stop ${pane} failed:`, e.message);
   try {

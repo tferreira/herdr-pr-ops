@@ -318,13 +318,25 @@ const { agentMark, glyphs, setGlyphMode } = require("../lib/marks");
 
 // Opened with the open-remote action: this screen is attached from another
 // machine, so use the "remote" settings for this session.
-let REMOTE_SCREEN = false;
+// Remote-screen mode: the open-remote action turns it on for one session,
+// and the m key toggles it (remembered in ui.json) for people who would
+// rather not bind anything on the machine they attach from.
+let REMOTE_SCREEN = !DEMO && !!ui.remoteScreen;
 try {
   const m = U.readJSON(U.paths.pendingMode, null);
   if (m && m.remote && Date.now() - (m.at || 0) < 60000) REMOTE_SCREEN = true;
   if (m) fs.unlinkSync(U.paths.pendingMode);
 } catch {}
-if (REMOTE_SCREEN) setGlyphMode(U.config().remote.glyphs);
+setGlyphMode(REMOTE_SCREEN ? U.config().remote.glyphs : null);
+
+function toggleRemoteScreen() {
+  REMOTE_SCREEN = !REMOTE_SCREEN;
+  ui.remoteScreen = REMOTE_SCREEN;
+  saveUi();
+  setGlyphMode(REMOTE_SCREEN ? U.config().remote.glyphs : null);
+  lastLines = [];
+  say(REMOTE_SCREEN ? "⇄ REMOTE SCREEN · LINKS COPIED HERE, PLAIN ICONS · m TO UNDO" : "▣ THIS SCREEN · LINKS OPEN THE BROWSER · m TO UNDO", C.amber, 4000);
+}
 function agentBadge(pr, bg) {
   const list = agentsFor(pr);
   if (!list.length) return "";
@@ -390,6 +402,15 @@ function launch(kind, prs, reusePane) {
   say(`▲ ${verb} LAUNCHING · ${names}`, C.magenta);
 }
 
+function herdrTabOf(pane) {
+  try {
+    const out = require("node:child_process").execFileSync(process.env.HERDR_BIN_PATH || "herdr", ["pane", "get", pane], { encoding: "utf8", timeout: 3000 });
+    return JSON.parse(out).result.pane.tab_id;
+  } catch {
+    return null;
+  }
+}
+
 // x stops the card's agent: a first press arms, a second within 3 s fires.
 let stopArmed = null; // { pane, until }
 
@@ -403,7 +424,15 @@ function stopAgent(pr) {
   }
   stopArmed = null;
   if (DEMO) return say(`DEMO MODE · WOULD STOP ${ag.pane_id}`, C.violet);
-  spawn(process.execPath, [path.join(__dirname, "stop.js"), ag.pane_id], { detached: true, stdio: "ignore", env: process.env }).unref();
+  // The popup sits on the tab it was opened from; closing that tab closes it.
+  let underTab = null;
+  try {
+    underTab = JSON.parse(process.env.HERDR_PLUGIN_CONTEXT_JSON || "{}").tab_id || null;
+  } catch {}
+  const sameTab = !!underTab && herdrTabOf(ag.pane_id) === underTab;
+  const args = [path.join(__dirname, "stop.js"), ag.pane_id, ...(sameTab ? ["--reopen"] : [])];
+  if (sameTab) saveUi();
+  spawn(process.execPath, args, { detached: true, stdio: "ignore", env: process.env }).unref();
   agents.delete(ag.pane_id);
   links = linkAgents(agents, data.prs, agentMap);
   work = buildWork();
@@ -880,6 +909,7 @@ function overlayHelp(out, W, H) {
     ["z / s", "snooze until the PR changes / show snoozed"],
     ["n", "new task from a ticket: GitHub, Jira, Linear, YouTrack, Sentry"],
     [",", "settings: edit config.json in $EDITOR"],
+    ["m", "screen mode: remote (herdr --remote) / this screen"],
     ["/", "filter by repo, title, author"],
     ["R  F5", "scan GitHub now"],
     ["q  esc", "close"],
@@ -1433,6 +1463,8 @@ function onKey(k) {
       return;
     case "n":
       return openTask("");
+    case "m":
+      return toggleRemoteScreen();
     case ",":
       return editConfig();
     case "s":

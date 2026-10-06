@@ -246,6 +246,12 @@ function buildWork() {
     taken.add(v.task);
   }
   // Tasks still launching, or whose launch failed: a card without an agent.
+  // Their branch is remembered so the agent that is starting on it does not
+  // also show as hand-started work.
+  const launching = new Set();
+  for (const [key, L] of Object.entries(launches)) {
+    if (key.startsWith("task:") && L.task && L.state === "starting") launching.add(T.branchName(L.task));
+  }
   for (const [key, L] of Object.entries(launches)) {
     if (!key.startsWith("task:") || !L.task) continue;
     if (L.state !== "starting" && L.state !== "error") continue;
@@ -264,6 +270,7 @@ function buildWork() {
     if (!info || !info.repo || !info.branch || DEFAULT_BRANCHES.has(info.branch)) continue;
     if (orgs.length && !orgs.includes(info.repo.split("/")[0].toLowerCase())) continue;
     if (prBranches.has(`${info.repo.toLowerCase()}#${info.branch}`)) continue;
+    if (launching.has(info.branch)) continue;
     const key = (info.branch.match(/^([A-Za-z][A-Za-z0-9_]*-[0-9][0-9A-Za-z]*)/) || [])[1];
     out.push(workItem(a, { id: key ? key.toUpperCase() : info.branch, repo: info.repo, repoName: info.repo.split("/")[1], branch: info.branch }));
   }

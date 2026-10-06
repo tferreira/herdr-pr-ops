@@ -104,7 +104,8 @@ opens the board with fake data; nothing is fetched or launched.
 
 Alt+click a card to mark it (Herdr popups keep plain clicks and the wheel
 for themselves). The bottom bar always shows the keys that apply to the
-selected PR.
+selected PR; when `enter` does the same as `r` or `c`, they share a chip
+(`↵ r REVIEW`).
 
 ## How agents are started
 
@@ -125,7 +126,9 @@ selected PR.
   Ctrl+click a YouTrack or Sentry issue link in any Herdr pane to open the
   task box prefilled.
 
-Local clones are found as `<repoRoot>/<repo name>`; without one, the agent
+Fetches go over HTTPS with `gh`'s token, so they work without an SSH agent
+and despite `url.<ssh>.insteadOf` rewrites. Local clones are found as
+`<repoRoot>/<repo name>`; without one, the agent
 starts in your home directory and works from `gh`.
 
 ## Settings

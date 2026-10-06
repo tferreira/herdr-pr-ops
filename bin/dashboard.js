@@ -620,6 +620,28 @@ function render() {
   if (buf) process.stdout.write(`${ESC}?2026h${buf}${ESC}?2026l`);
 }
 
+// Action chips. When enter does the same as r or c, they share one chip
+// ("↵ r REVIEW") so the bar keeps a fixed layout and shows what enter does.
+function actionKeys(sel, key) {
+  const pr = sel && sel.pr;
+  const ag = pr && agentFor(pr);
+  const act = pr && !ag ? enterAction(pr) : null;
+  const enterIs = (kind) => act && act.kind === kind;
+  let out = "";
+  if (ag) out += key(" ↵ ", "JUMP");
+  if (ui.tab === "review") {
+    out += key(enterIs("review") ? " ↵ r " : " r ", "REVIEW");
+    out += key(enterIs("recheck") ? " ↵ c " : " c ", "RE-CHECK");
+    if (act && !act.kind) out += key(" ↵ ", act.label, false);
+    return out;
+  }
+  if (act) out += key(" ↵ ", act.label);
+  out += key(" c ", "FIX");
+  out += key(" d ", marked.length ? `DEPLOY ${marked.length}` : "DEPLOY", marked.length > 0 || (pr && canDeploy(pr) === true));
+  out += key(" ␣ ", "MARK", !!(pr && canDeploy(pr) === true));
+  return out;
+}
+
 function footerLines(sel, W, base) {
   const line = (s) => fit(s, W, base);
   const rule = S("─".repeat(W), { fg: C.line, bg: C.bg });
@@ -657,16 +679,7 @@ function footerLines(sel, W, base) {
     S(`${k}`, { fg: on ? C.bg : C.dim, bg: on ? C.cyan : C.line, bold: true }) + S(` ${label}  `, { fg: on ? C.text : C.dim, bg: C.bg });
   const keys =
     S(" ", { bg: C.bg }) +
-    (sel
-      ? agentFor(sel.pr)
-        ? key(" ↵ ", "JUMP")
-        : key(" ↵ ", enterAction(sel.pr).label, !!enterAction(sel.pr).kind)
-      : "") +
-    (ui.tab === "review"
-      ? key(" r ", "REVIEW") + key(" c ", "RE-CHECK")
-      : key(" c ", "FIX") +
-        key(" d ", marked.length ? `DEPLOY ${marked.length}` : "DEPLOY", marked.length > 0 || (sel && canDeploy(sel.pr) === true)) +
-        key(" ␣ ", "MARK", !!(sel && canDeploy(sel.pr) === true))) +
+    actionKeys(sel, key) +
     key(" o ", "OPEN") +
     key(" f ", "FILES") +
     key(" z ", "SNOOZE") +
@@ -1076,6 +1089,8 @@ function main() {
   if (SNAP) {
     if (SNAP[1]) ui.tab = SNAP[1];
     if (SNAP[2] !== undefined) openTask(SNAP[2]);
+    // SNAP_KEYS='["\u001b[C","\r"]': replay keys before the frame (tests).
+    for (const k of JSON.parse(process.env.SNAP_KEYS || "[]")) onKey(k);
     pollFiles();
     pollAgents();
     if (!DEMO) {

@@ -88,7 +88,7 @@ opens the board with fake data; nothing is fetched or launched.
 | `r` | review: new agent in a worktree at the PR head |
 | `c` | re-check: were your comments addressed? Reuses the review agent when it is still open |
 | `d` | ship an approved PR (CI green, nothing to answer, no conflict), or every marked PR |
-| `space` | mark a ready PR for a multi-ship; marks are numbered in shipping order, `esc` clears them |
+| `space`, alt+click | mark a ready PR for a multi-ship; marks are numbered in shipping order, `esc` clears them |
 | `enter` | jump to the PR's agent |
 | `o` / `f` | open the PR / its changed files in the browser |
 | `y` | copy the PR URL |
@@ -100,9 +100,9 @@ opens the board with fake data; nothing is fetched or launched.
 | `?` | help |
 | `q`, `esc` | close |
 
-The mouse works too: click a card or a tab to select it, ctrl+click a card to
-mark it, scroll with the wheel. The bottom bar always shows the keys that apply
-to the selected PR.
+Alt+click a card to mark it (Herdr popups keep plain clicks and the wheel
+for themselves). The bottom bar always shows the keys that apply to the
+selected PR.
 
 ## How agents are started
 

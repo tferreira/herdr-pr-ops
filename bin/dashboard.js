@@ -327,16 +327,11 @@ function switchAgent() {
   say(`◆ NEW AGENTS: ${agentKind.toUpperCase()}`, BRAND[agentKind] || C.violet, 2500);
 }
 
-// Header chip for the agent new launches start, when there is a choice,
-// with its key.
+// Header chip for the agent new launches start, when there is a choice.
 function agentChip() {
   if (AGENT_KINDS.length < 2) return [];
   const logo = icons().logo[agentKind];
-  return [
-    ["a", { fg: C.cyan, bold: true }],
-    [" ⇄ ", { fg: C.dim }],
-    [`${logo ? `${logo} ` : ""}${agentKind.toUpperCase()}   `, { fg: BRAND[agentKind] || C.violet, bold: true }],
-  ];
+  return [[`${logo ? `${logo} ` : "◆ "}${agentKind.toUpperCase()}   `, { fg: BRAND[agentKind] || C.violet, bold: true }]];
 }
 
 function agentBadge(pr, bg) {

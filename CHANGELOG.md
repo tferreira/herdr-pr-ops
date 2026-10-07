@@ -3,6 +3,18 @@
 Versions follow [semantic versioning](https://semver.org). Before 1.0 the
 board, keys and config can still change between minor versions.
 
+## Unreleased
+
+### Added
+- A working deploy agent's badge reads `deploying` instead of `working`,
+  and its cards carry a rocket (`⇡` with `icons: "text"`), also after the
+  PR merges. When one deploy ships several PRs, each card lists the others
+  (`WITH #1873`).
+
+### Fixed
+- A deploy of several marked PRs showed its agent on only one card; it now
+  shows on each, and enter on any of them goes to it.
+
 ## 0.6.0 - 2026-10-07
 
 ### Added

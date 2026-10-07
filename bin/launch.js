@@ -12,6 +12,8 @@
 // repo's workspace. The dashboard runs this detached and follows progress
 // through launches.json.
 
+const fs = require("node:fs");
+const path = require("node:path");
 const { checkoutInfo } = require("../lib/gitinfo");
 const { paths, readJSON, writeJSON, config, log, herdr, sh, localRepoPath, HOME, fill, promptsFor } = require("../lib/util");
 
@@ -63,6 +65,29 @@ function liveAgent(paneId) {
 
 // Creation results carry the new root pane; fall back to listing the
 // workspace when a command only reports the workspace.
+// A worktree inside the clone (the default, .claude/worktrees/) must not show
+// up in the clone's own git status: its folder goes in .git/info/exclude,
+// which is local and changes no tracked file.
+function prepareWorktreePath(repo, wtPath) {
+  const dir = path.dirname(wtPath);
+  fs.mkdirSync(dir, { recursive: true });
+  const rel = path.relative(repo, dir);
+  if (!rel || rel.startsWith("..") || path.isAbsolute(rel)) return;
+  try {
+    sh("git", ["-C", repo, "check-ignore", "--quiet", wtPath]);
+    return;
+  } catch {}
+  const common = path.resolve(repo, sh("git", ["-C", repo, "rev-parse", "--git-common-dir"]).trim());
+  const exclude = path.join(common, "info", "exclude");
+  fs.mkdirSync(path.dirname(exclude), { recursive: true });
+  let text = "";
+  try {
+    text = fs.readFileSync(exclude, "utf8");
+  } catch {}
+  fs.appendFileSync(exclude, `${text && !text.endsWith("\n") ? "\n" : ""}/${rel.split(path.sep).join("/")}/\n`);
+  log(`${exclude}: ignoring /${rel}/`);
+}
+
 function rootPane(result) {
   const pick = (o) => o && (o.pane_id || (o.root_pane && o.root_pane.pane_id) || (o.pane && o.pane.pane_id));
   const direct = pick(result) || pick(result && result.worktree) || pick(result && result.workspace);
@@ -136,6 +161,7 @@ function addressPane(pr) {
   if (!hasBranch) sh("git", ["-C", repo, "branch", "--track", branch, remote]);
   const wtPath = fill(config().worktreePath, { repo, number: pr.number });
   setStatus("starting", "creating worktree");
+  prepareWorktreePath(repo, wtPath);
   return rootPane(herdr(["worktree", "create", "--cwd", repo, "--branch", branch, "--path", wtPath, "--label", label, "--no-focus"]));
 }
 
@@ -157,6 +183,7 @@ function reviewPane(pr) {
     sh("git", ["-C", repo, "branch", "-f", branch, ref]);
     setStatus("starting", "creating worktree");
     const wtPath = fill(config().worktreePath, { repo, number: pr.number });
+    prepareWorktreePath(repo, wtPath);
     return rootPane(
       herdr(["worktree", "create", "--cwd", repo, "--branch", branch, "--path", wtPath, "--label", label, "--no-focus"]),
     );
@@ -241,6 +268,7 @@ function taskPane(t) {
   }
   if (!hasBranch) args.push("--base", base);
   setStatus("starting", "creating worktree");
+  prepareWorktreePath(repo, wtPath);
   return rootPane(herdr(args));
 }
 

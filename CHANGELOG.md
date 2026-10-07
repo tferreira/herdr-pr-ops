@@ -3,7 +3,7 @@
 Versions follow [semantic versioning](https://semver.org). Before 1.0 the
 board, keys and config can still change between minor versions.
 
-## Unreleased
+## 0.8.1 - 2026-10-07
 
 ### Fixed
 - An agent started by hand in a clone left on the branch of a merged or

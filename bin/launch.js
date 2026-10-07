@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 "use strict";
 
-// launch.js <review|recheck|status|address|deploy> <pr-url> [<pr-url>...] [--pane <id>]
+// launch.js <review|recheck|status|address|deploy> <pr-url> [<pr-url>...] [--pane <id>] [--agent <kind>]
 //   several urls: deploy only, one repo. --pane: an agent already on the PR
 //   (picked by the dashboard), prompted instead of starting a new one when idle.
+//   --agent: the Herdr agent kind to start (default: agentKind).
 // launch.js task '{"kind":"jira","label":"Jira issue","id":"PROJ-123","url":null,"repoPath":"/.../api","repoName":"api"}'
 //
 // Starts (or reuses) a Claude pane for a PR. Reviews run in a Herdr worktree
@@ -12,11 +13,13 @@
 // through launches.json.
 
 const { checkoutInfo } = require("../lib/gitinfo");
-const { paths, readJSON, writeJSON, config, log, herdr, sh, localRepoPath, HOME, fill } = require("../lib/util");
+const { paths, readJSON, writeJSON, config, log, herdr, sh, localRepoPath, HOME, fill, promptsFor } = require("../lib/util");
 
 const argv = process.argv.slice(2);
 const paneFlag = argv.indexOf("--pane");
 const reusePane = paneFlag >= 0 ? argv.splice(paneFlag, 2)[1] : null;
+const agentFlag = argv.indexOf("--agent");
+const agentKind = (agentFlag >= 0 ? argv.splice(agentFlag, 2)[1] : null) || config().agentKind;
 const [kind, arg, ...more] = argv;
 const task = kind === "task" ? JSON.parse(arg) : null;
 // launches.json / agents.json keys: the PR urls, or task:<ticket id>.
@@ -36,11 +39,12 @@ function setStatus(state, msg = "") {
 }
 
 // {url} and {urls} both take every PR url (space separated) so a one-PR
-// template like "/deploy {url}" also works for a multi-PR deploy.
-function prompts(prs) {
+// template like "/deploy {url}" also works for a multi-PR deploy. `agent`:
+// the kind the prompt goes to, which picks the prompt set.
+function prompts(prs, agent) {
   const urls = prs.map((p) => p.url).join(" ");
   const numbers = prs.map((p) => p.number).join(" ");
-  return fill(config().prompts[kind], { url: urls, urls, repo: prs[0].repo, number: numbers, numbers });
+  return fill(promptsFor(agent)[kind], { url: urls, urls, repo: prs[0].repo, number: numbers, numbers });
 }
 
 function agentName(prs) {
@@ -185,11 +189,12 @@ function deployPane(prs) {
 // A fresh pane's shell may still be drawing its prompt; agent start refuses
 // until it is ready, so retry a few times.
 async function startAgent(name, pane) {
-  const kindName = config().agentKind;
   let lastErr;
   for (let i = 0; i < 6; i++) {
     try {
-      return herdr(["agent", "start", i < 3 ? name : `${name.slice(0, 28)}-${i}`, "--kind", kindName, "--pane", pane, "--timeout", "60000"], {
+      const extra = config().agentArgs[agentKind] || [];
+      const args = ["agent", "start", i < 3 ? name : `${name.slice(0, 28)}-${i}`, "--kind", agentKind, "--pane", pane, "--timeout", "60000"];
+      return herdr(extra.length ? [...args, "--", ...extra] : args, {
         timeout: 70000,
       });
     } catch (e) {
@@ -256,8 +261,9 @@ async function runTask(t) {
   };
   writeJSON(paths.agents, fresh);
   const cfg = config();
+  const P = promptsFor(agentKind);
   const custom = (cfg.trackers || []).find((x) => x.name === t.kind);
-  const tpl = (custom && custom.prompt) || cfg.prompts[t.kind] || cfg.prompts.ticket;
+  const tpl = (custom && custom.prompt) || P[t.kind] || P.ticket;
   const text = fill(tpl, { id: t.id, label: t.label, url: t.url || "", urlNote: t.url ? ` (${t.url})` : "" });
   herdr(["agent", "prompt", pane, text]);
   setStatus("done");
@@ -282,7 +288,7 @@ async function main() {
     if (!["idle", "done"].includes(live.agent_status)) {
       throw new Error(`agent is ${live.agent_status}, press enter to go to it`);
     }
-    herdr(["agent", "prompt", live.pane_id, prompts(prs)]);
+    herdr(["agent", "prompt", live.pane_id, prompts(prs, live.agent)]);
     setStatus("done");
     return;
   }
@@ -297,9 +303,9 @@ async function main() {
   for (const k of keys) fresh[k] = { ...(fresh[k] || {}), [slot]: pane };
   writeJSON(paths.agents, fresh);
 
-  herdr(["agent", "prompt", pane, prompts(prs)]);
+  herdr(["agent", "prompt", pane, prompts(prs, agentKind)]);
   setStatus("done");
-  log(`${kind} started for ${keys.join(" ")} in ${pane}`);
+  log(`${kind} (${agentKind}) started for ${keys.join(" ")} in ${pane}`);
 }
 
 main().catch((e) => {

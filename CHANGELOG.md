@@ -3,6 +3,11 @@
 Versions follow [semantic versioning](https://semver.org). Before 1.0 the
 board, keys and config can still change between minor versions.
 
+## Unreleased
+
+### Changed
+- The manifest lists macOS only until the plugin is tried on Linux.
+
 ## 0.5.0 - 2026-10-07
 
 ### Added

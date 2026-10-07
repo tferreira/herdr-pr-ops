@@ -61,7 +61,8 @@ each one in the right checkout.
 
 ## Install
 
-Requirements: [Herdr](https://herdr.dev) 0.9+, Node 18+, an authenticated
+Requirements: macOS (Linux should work but is untested, so the manifest
+doesn't list it yet), [Herdr](https://herdr.dev) 0.9+, Node 18+, an authenticated
 [GitHub CLI](https://cli.github.com) (`gh auth login`), and a
 [Nerd Font](https://www.nerdfonts.com) 3.5 or later in your terminal for the
 icons (or set `"icons": "text"`).

@@ -3,7 +3,7 @@
 Versions follow [semantic versioning](https://semver.org). Before 1.0 the
 board, keys and config can still change between minor versions.
 
-## Unreleased
+## 0.8.0 - 2026-10-07
 
 ### Changed
 - Worktrees go inside the clone, in `.claude/worktrees/` (`pr-<N>` for

@@ -38,7 +38,8 @@ each one in the right checkout.
   yours to configure.
 - **Agents on the board.** Each card shows the agent working on that PR:
   spinner while working, a pulsing `?` when it waits on
-  you, `✓` when done. Agents you started by hand count too, matched by their
+  you, `✓` when done, and `deploying` instead of `working` for a ship.
+  Agents you started by hand count too, matched by their
   title, their folder's branch and, for Claude Code, the PR URLs, worktree
   paths, branches and ticket IDs in their recent session. `enter` jumps to the
   agent's pane.
@@ -153,7 +154,9 @@ selected PR; when `enter` does the same as `r` or `c`, they share a chip
   worktrees hold your work and are never removed, nor are main clones.
 - **Ships** (`d`) open a tab in the repo's workspace. Marked PRs ship
   together: one agent per repo, given all of that repo's PRs in marking order
-  (`{url}` and `{urls}` hold the space-separated URLs).
+  (`{url}` and `{urls}` hold the space-separated URLs). Each shipped card
+  shows that agent, a rocket, and the PRs shipping with it (`WITH #1873`);
+  `enter` on any of them jumps to the agent.
 - **Tasks** (`n`) create a worktree on a branch named after the ticket, from
   the remote default branch, and ask the agent for a plan before any code.
   Ctrl+click an issue link (GitHub, Jira Cloud, Linear, YouTrack Cloud,

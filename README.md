@@ -140,8 +140,10 @@ selected PR; when `enter` does the same as `r` or `c`, they share a chip
 ## How agents are started
 
 - **Reviews** (`r`, `c`) fetch `refs/pull/<N>/head` into a branch `pr-<N>` and
-  open it as a Herdr worktree next to your clone (`<clone>-pr<N>`), so your
-  own checkout is never touched. A re-check moves a clean review worktree to
+  open it as a Herdr worktree inside your clone
+  (`<clone>/.claude/worktrees/pr-<N>`, where Claude Code keeps its own), so
+  your own checkout is never touched. The plugin adds that folder to the
+  clone's `.git/info/exclude` when git does not ignore it yet. A re-check moves a clean review worktree to
   the new head and reuses the agent if it is still open.
 - **Your own PRs** (`enter` for a status report, `c` to fix) prompt the agent
   already on the PR when it is idle; otherwise they open your existing
@@ -196,8 +198,8 @@ optional and changes apply on the next scan.
   "pollSeconds": 180,
   "agentKind": "claude",
   "icons": "nerd",
-  "worktreePath": "{repo}-pr{number}",
-  "taskWorktreePath": "{repo}-{slug}",
+  "worktreePath": "{repo}/.claude/worktrees/pr-{number}",
+  "taskWorktreePath": "{repo}/.claude/worktrees/{slug}",
   "jiraUrl": "https://acme.atlassian.net",
   "linearUrl": "https://linear.app/acme",
   "youtrackUrl": "https://acme.youtrack.cloud",
@@ -234,6 +236,8 @@ optional and changes apply on the next scan.
 | `agents` | `auto` | agents `a` switches between; `auto` finds Claude Code, Codex, Gemini, OpenCode, Cursor, Copilot, Amp and Qwen on the PATH |
 | `agentArgs` | Codex: `-c check_for_update_on_startup=false` | extra command-line arguments per agent kind, e.g. `{ "claude": ["--model", "opus"] }` |
 | `agentPrompts` | `{}` | prompts for the other agents, by kind: `{ "codex": { "review": "..." } }`; without one they get the built-in prompts, never `prompts` |
+| `worktreePath` | `{repo}/.claude/worktrees/pr-{number}` | review and fix worktrees; `{repo}` is the clone's path. `{repo}-pr{number}` puts them next to the clone |
+| `taskWorktreePath` | `{repo}/.claude/worktrees/{slug}` | task worktrees (`n`); `{slug}` is the ticket, e.g. `proj123` |
 | `icons` | `nerd` | `nerd`: [Nerd Font](https://www.nerdfonts.com) icons (3.5+ for the Claude and OpenAI logos); `text`: plain Unicode for any font |
 | `prompts.*` | plain-language prompts, no skills needed | point them at your own skills or slash commands. PR prompts get `{url}` `{urls}` `{repo}` `{number}`, task prompts `{id}` `{url}` `{urlNote}` |
 

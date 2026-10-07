@@ -3,6 +3,20 @@
 Versions follow [semantic versioning](https://semver.org). Before 1.0 the
 board, keys and config can still change between minor versions.
 
+## Unreleased
+
+### Changed
+- Worktrees go inside the clone, in `.claude/worktrees/` (`pr-<N>` for
+  reviews and fixes, the ticket slug for tasks), where Claude Code keeps its
+  own, instead of next to it. The folder is added to the clone's
+  `.git/info/exclude` when git does not ignore it yet. Existing worktrees
+  are still found by branch; `worktreePath` and `taskWorktreePath` bring the
+  old layout back.
+
+### Fixed
+- Agents working in a worktree under `.claude/worktrees/` were not matched
+  to the PR of that worktree's branch.
+
 ## 0.7.0 - 2026-10-07
 
 ### Added

@@ -5,6 +5,17 @@ board, keys and config can still change between minor versions.
 
 ## Unreleased
 
+### Added
+- `a` switches the agent that new launches start between the installed
+  ones (Claude Code, Codex, ...), shown in the header and remembered. Your
+  `prompts` go to your default agent only; others get the built-in prompts
+  or their own `agentPrompts`. `agents` config lists them by hand.
+- `agentArgs` config: extra command-line arguments per agent kind.
+
+### Fixed
+- Codex's update dialog at startup took the board's prompt as its answer
+  and started an upgrade; Codex now starts with its update check off.
+
 ### Changed
 - The manifest lists macOS only until the plugin is tried on Linux.
 

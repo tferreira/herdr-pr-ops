@@ -124,6 +124,7 @@ for what changed); remove with the `remove-keybinding` action, then
 | `y` | copy the PR URL (to the screen you look at, also over `herdr --remote`) |
 | `z` / `s` | snooze until the PR changes / show snoozed |
 | `n` | new task from a ticket: GitHub, Jira, Linear, YouTrack or Sentry (`tab` picks the tracker for a bare `PROJ-123`) |
+| `a` | agent for new launches: Claude Code, Codex, ... (the ones installed; shown in the header) |
 | `/` | filter by repo, title or author |
 | `R`, `F5` | full rescan |
 | `,` | settings: edit `config.json` in `$EDITOR` |
@@ -158,8 +159,10 @@ selected PR; when `enter` does the same as `r` or `c`, they share a chip
   Ctrl+click an issue link (GitHub, Jira Cloud, Linear, YouTrack Cloud,
   Sentry) in any Herdr pane to open the task box prefilled.
 
-**Agents.** Built around Claude Code, and tested with Codex (`"agentKind":
-"codex"`); any Herdr agent kind works. Agents the board starts are always on
+**Agents.** Built around Claude Code, and tested with Codex; any Herdr agent
+kind works. `a` switches the agent new launches start; your `prompts` go to
+your default agent only, since they may name its skills, and the others get
+the built-in prompts or their own `agentPrompts`. Agents the board starts are always on
 the right card. For agents you start by hand, Claude Code's session history
 is read for evidence (PR URLs, branches, ticket IDs); other agents are
 matched by their title and their folder's branch only.
@@ -224,7 +227,10 @@ optional and changes apply on the next scan.
 | `repos` | | explicit `owner/name` → path |
 | `pollSeconds` | `180` | scan interval |
 | `openLinks` | `auto` | `o` / `f`: `browser`, `copy` (OSC 52 to your terminal's clipboard), or `auto` (copy on a machine without a display, like plain SSH) |
-| `agentKind` | `claude` | any [Herdr agent kind](https://herdr.dev) |
+| `agentKind` | `claude` | default agent, any [Herdr agent kind](https://herdr.dev) |
+| `agents` | `auto` | agents `a` switches between; `auto` finds Claude Code, Codex, Gemini, OpenCode, Cursor, Copilot, Amp and Qwen on the PATH |
+| `agentArgs` | Codex: `-c check_for_update_on_startup=false` | extra command-line arguments per agent kind, e.g. `{ "claude": ["--model", "opus"] }` |
+| `agentPrompts` | `{}` | prompts for the other agents, by kind: `{ "codex": { "review": "..." } }`; without one they get the built-in prompts, never `prompts` |
 | `icons` | `nerd` | `nerd`: [Nerd Font](https://www.nerdfonts.com) icons (3.5+ for the Claude and OpenAI logos); `text`: plain Unicode for any font |
 | `prompts.*` | plain-language prompts, no skills needed | point them at your own skills or slash commands. PR prompts get `{url}` `{urls}` `{repo}` `{number}`, task prompts `{id}` `{url}` `{urlNote}` |
 

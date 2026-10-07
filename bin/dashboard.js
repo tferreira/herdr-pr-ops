@@ -67,6 +67,9 @@ const ui = Object.assign(
   { tab: "review", sel: {}, snoozed: {}, showSnoozed: false },
   DEMO ? {} : U.readJSON(U.paths.ui, {}),
 );
+// The agent new launches start: `a` switches between the installed ones.
+const AGENT_KINDS = DEMO ? ["claude", "codex"] : U.availableAgents();
+let agentKind = AGENT_KINDS.includes(ui.agent) ? ui.agent : AGENT_KINDS[0];
 let cacheMtime = 0;
 let agents = new Map(); // pane_id -> agent
 let agentMap = U.readJSON(U.paths.agents, {});
@@ -314,7 +317,22 @@ function agentFor(pr) {
 }
 
 // Card border badge: logo, lifecycle mark, label.
-const { agentMark, icons } = require("../lib/marks");
+const { agentMark, icons, BRAND } = require("../lib/marks");
+
+function switchAgent() {
+  if (AGENT_KINDS.length < 2) return say(`ONLY ${agentKind.toUpperCase()} FOUND · LIST OTHERS IN "agents" (CONFIG)`, C.amber, 4000);
+  agentKind = AGENT_KINDS[(AGENT_KINDS.indexOf(agentKind) + 1) % AGENT_KINDS.length];
+  ui.agent = agentKind;
+  saveUi();
+  say(`◆ NEW AGENTS: ${agentKind.toUpperCase()}`, BRAND[agentKind] || C.violet, 2500);
+}
+
+// Header chip for the agent new launches start, when there is a choice.
+function agentChip() {
+  if (AGENT_KINDS.length < 2) return [];
+  const logo = icons().logo[agentKind];
+  return [[`${logo ? `${logo} ` : "◆ "}${agentKind.toUpperCase()}   `, { fg: BRAND[agentKind] || C.violet, bold: true }]];
+}
 
 function agentBadge(pr, bg) {
   const list = agentsFor(pr);
@@ -369,7 +387,7 @@ function launch(kind, prs, reusePane) {
   for (const p of prs) all[p.url] = { kind, state: "starting", msg: "queued", at: new Date().toISOString() };
   U.writeJSON(U.paths.launches, all);
   launches = all;
-  const args = [path.join(__dirname, "launch.js"), kind, ...prs.map((p) => p.url)];
+  const args = [path.join(__dirname, "launch.js"), kind, ...prs.map((p) => p.url), "--agent", agentKind];
   if (reusePane) args.push("--pane", reusePane);
   const child = spawn(process.execPath, args, {
     detached: true,
@@ -378,7 +396,8 @@ function launch(kind, prs, reusePane) {
   });
   child.unref();
   const verb = { review: "REVIEW", recheck: "RE-CHECK", status: "STATUS CHECK", address: "ADDRESS COMMENTS", deploy: "DEPLOY" }[kind];
-  say(`▲ ${verb} LAUNCHING · ${names}`, C.magenta);
+  const who = AGENT_KINDS.length > 1 && !reusePane ? ` · ${agentKind.toUpperCase()}` : "";
+  say(`▲ ${verb} LAUNCHING${who} · ${names}`, C.magenta);
 }
 
 function herdrTabOf(pane) {
@@ -629,7 +648,7 @@ function render() {
       : [["◉", { fg: pulse(C.green, C.bg, 2400) }], [` SYNC ${ago(data.fetchedAt) || "—"}`, { fg: C.mute }]];
   const text = [
     { row: 1, x: Header.LOGO_END + 3, runs: [["pull request mission control", { fg: C.dim, italic: true }]] },
-    { row: 1, x: -2, runs: [[`@${data.me || "?"}   `, { fg: C.violet }], ...sync] },
+    { row: 1, x: -2, runs: [...agentChip(), [`@${data.me || "?"}   `, { fg: C.violet }], ...sync] },
     { row: 2, x: -2, runs: [...agentSummary(), [clock, { fg: C.mute }]] },
   ];
   for (const l of header.render(W, Date.now(), text)) out.push(line(l));
@@ -887,6 +906,7 @@ function overlayHelp(out, W, H) {
     ["y", "copy PR url (to the screen you look at, also over --remote)"],
     ["z / s", "snooze until the PR changes / show snoozed"],
     ["n", "new task from a ticket: GitHub, Jira, Linear, YouTrack, Sentry"],
+    ["a", "agent for new launches: claude, codex, ... (the installed ones)"],
     [",", "settings: edit config.json in $EDITOR"],
     ["/", "filter by repo, title, author"],
     ["R  F5", "scan GitHub now"],
@@ -976,7 +996,7 @@ function launchTask(t) {
   all[`task:${t.id}`] = { kind: "task", state: "starting", msg: "queued", at: new Date().toISOString(), task: t };
   U.writeJSON(U.paths.launches, all);
   launches = all;
-  const child = spawn(process.execPath, [path.join(__dirname, "launch.js"), "task", JSON.stringify(t)], {
+  const child = spawn(process.execPath, [path.join(__dirname, "launch.js"), "task", JSON.stringify(t), "--agent", agentKind], {
     detached: true,
     stdio: "ignore",
     env: process.env,
@@ -1440,6 +1460,8 @@ function onKey(k) {
       return;
     case "n":
       return openTask("");
+    case "a":
+      return switchAgent();
     case ",":
       return editConfig();
     case "s":

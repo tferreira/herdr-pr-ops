@@ -3,6 +3,13 @@
 Versions follow [semantic versioning](https://semver.org). Before 1.0 the
 board, keys and config can still change between minor versions.
 
+## Unreleased
+
+### Fixed
+- An agent started by hand in a clone left on the branch of a merged or
+  closed PR took that branch's ticket (PROJ-123 from `PROJ-123-...`) on its
+  In progress card. It now shows under the repo name, without the branch.
+
 ## 0.8.0 - 2026-10-07
 
 ### Changed

@@ -231,6 +231,51 @@ function workItem(a, m) {
   };
 }
 
+// Has this branch's PR already been merged or closed? A clone often stays on
+// such a branch long after it shipped, and an agent started there by hand is
+// on something else: its card must not take the old branch's ticket. Asked
+// once per branch with gh (a shipped answer is kept, others asked again
+// after a while, the last answer standing in meanwhile). Answers are saved,
+// so a restarted dashboard knows them at once. null: not known yet.
+const SHIPPED_RECHECK_MS = 10 * 60 * 1000;
+const SHIPPED_KEEP_MS = 30 * 24 * 3600 * 1000;
+const shipped = new Map(Object.entries(DEMO ? {} : U.readJSON(U.paths.branches, {}))); // repo#branch -> { done, at, pending }
+
+function saveShipped() {
+  const now = Date.now();
+  const keep = {};
+  for (const [k, v] of shipped) if (v.at && now - v.at < SHIPPED_KEEP_MS) keep[k] = { done: v.done, at: v.at };
+  try {
+    U.writeJSON(U.paths.branches, keep);
+  } catch {}
+}
+
+function branchShipped(repo, branch) {
+  const done = (p) => p.quiet && p.quiet.kind !== "approved";
+  if (data.prs.some((p) => done(p) && p.repo.toLowerCase() === repo.toLowerCase() && p.headRef === branch)) return true;
+  if (DEMO) return false;
+  const k = `${repo.toLowerCase()}#${branch}`;
+  const hit = shipped.get(k);
+  const known = hit && hit.at ? hit.done : null;
+  if (hit && (hit.done || hit.pending || Date.now() - hit.at < SHIPPED_RECHECK_MS)) return known;
+  shipped.set(k, { ...hit, pending: true });
+  const args = ["pr", "list", "-R", repo, "--head", branch, "--state", "all", "--json", "state", "--limit", "10"];
+  execFile("gh", args, { encoding: "utf8", timeout: 15000 }, (err, out) => {
+    let states = null;
+    try {
+      states = JSON.parse(out).map((p) => p.state);
+    } catch {}
+    // gh failed: keep the last answer (or assume open) and ask again later.
+    if (err || !states) shipped.set(k, { done: known || false, at: Date.now() });
+    else {
+      shipped.set(k, { done: states.length > 0 && !states.includes("OPEN"), at: Date.now() });
+      saveShipped();
+    }
+    work = buildWork();
+  });
+  return known;
+}
+
 // Agents not on any PR: tasks started with n, and agents working on a
 // feature branch (not main/master) of one of your orgs' repos that has no
 // PR on the board yet. Agents elsewhere (home, other repos) are left out.
@@ -239,7 +284,9 @@ function buildWork() {
   for (const list of links.values()) for (const a of list) linked.add(a.pane_id);
   const cfg = U.config();
   const orgs = (cfg.orgs || []).map((o) => o.toLowerCase());
-  const prBranches = new Set(data.prs.map((p) => `${p.repo.toLowerCase()}#${p.headRef}`));
+  // Merged and closed PRs left out: an agent on their branch that is not
+  // linked to them is on something else (see branchShipped).
+  const prBranches = new Set(data.prs.filter((p) => !p.quiet || p.quiet.kind === "approved").map((p) => `${p.repo.toLowerCase()}#${p.headRef}`));
   const out = [];
   const taken = new Set();
   for (const [key, v] of Object.entries(agentMap)) {
@@ -274,8 +321,14 @@ function buildWork() {
     if (orgs.length && !orgs.includes(info.repo.split("/")[0].toLowerCase())) continue;
     if (prBranches.has(`${info.repo.toLowerCase()}#${info.branch}`)) continue;
     if (launching.has(info.branch)) continue;
+    const repoName = info.repo.split("/")[1];
+    // Shipped, or not known yet: the branch's ticket would be a guess.
+    if (branchShipped(info.repo, info.branch) !== false) {
+      out.push(workItem(a, { id: repoName, repo: info.repo, repoName, branch: "" }));
+      continue;
+    }
     const key = (info.branch.match(/^([A-Za-z][A-Za-z0-9_]*-[0-9][0-9A-Za-z]*)/) || [])[1];
-    out.push(workItem(a, { id: key ? key.toUpperCase() : info.branch, repo: info.repo, repoName: info.repo.split("/")[1], branch: info.branch }));
+    out.push(workItem(a, { id: key ? key.toUpperCase() : info.branch, repo: info.repo, repoName, branch: info.branch }));
   }
   return out;
 }

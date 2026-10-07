@@ -316,6 +316,20 @@ function agentFor(pr) {
   return agentsFor(pr)[0] || null;
 }
 
+// The live deploy agent launched for this PR, and the other PRs that launch
+// shipped with it: { agent, others: ["#1873"] }, or null.
+function deployOf(pr) {
+  const pane = agentMap[pr.url] && agentMap[pr.url].deploy;
+  if (!pane || !agents.has(pane)) return null;
+  const others = [];
+  for (const [url, slots] of Object.entries(agentMap)) {
+    if (url === pr.url || !slots || slots.deploy !== pane) continue;
+    const p = data.prs.find((x) => x.url === url);
+    others.push(p ? `#${p.number}` : `#${url.split("/").pop()}`);
+  }
+  return { agent: agents.get(pane), others };
+}
+
 // Card border badge: logo, lifecycle mark, label.
 const { agentMark, icons, BRAND } = require("../lib/marks");
 
@@ -338,13 +352,15 @@ function agentBadge(pr, bg) {
   const list = agentsFor(pr);
   if (!list.length) return "";
   const m = agentMark(list[0], tick, C);
+  const dep = deployOf(pr);
+  if (m.label === "working" && dep && dep.agent === list[0]) m.label = "deploying";
   const loud = list[0].agent_status === "blocked";
   const more = list.length > 1 ? S(` ×${list.length}`, { fg: C.mute, bg }) : "";
   return (
     S(m.logo, { fg: m.logoColor, bg, bold: true }) +
     S(" ", { bg }) +
     S(m.mark, { fg: m.markColor, bg, bold: true }) +
-    S(` ${m.label}`, { fg: loud ? C.red : m.label === "working" ? m.markColor : C.mute, bg, bold: loud }) +
+    S(` ${m.label}`, { fg: loud ? C.red : list[0].agent_status === "working" ? m.markColor : C.mute, bg, bold: loud }) +
     more
   );
 }
@@ -527,6 +543,14 @@ function chips(pr, bg) {
   const L = launches[pr.url];
   if (L && L.state === "starting") out.push(S(`${SWEEP[tick % 4]} ${L.msg || "launching"}`.toUpperCase(), { fg: pulse(C.cyan, C.violet, 800), bg, bold: true }));
   else if (L && L.state === "error") out.push(S("✕ LAUNCH FAILED", { fg: C.red, bg, bold: true }));
+  // Rocket while a deploy agent is on the card, with the other PRs it ships;
+  // the agent badge carries its state. Before the quiet check: a deploy goes
+  // on after its PR merges.
+  const dep = deployOf(pr);
+  if (dep) {
+    const group = dep.others.length ? ` WITH ${dep.others.join(" ")}` : "";
+    out.push(S(`${icons().deploy}${group}`, { fg: dep.agent.agent_status === "working" ? C.magenta : C.mute, bg, bold: true }));
+  }
   if (pr.quiet) {
     const q = {
       merged: ["⛙ MERGED", "#a371f7"],

@@ -157,6 +157,18 @@ selected PR; when `enter` does the same as `r` or `c`, they share a chip
   Ctrl+click an issue link (GitHub, Jira Cloud, Linear, YouTrack Cloud,
   Sentry) in any Herdr pane to open the task box prefilled.
 
+**Agents.** Built around Claude Code, and tested with Codex (`"agentKind":
+"codex"`); any Herdr agent kind works. Agents the board starts are always on
+the right card. For agents you start by hand, Claude Code's session history
+is read for evidence (PR URLs, branches, ticket IDs); other agents are
+matched by their title and their folder's branch only.
+
+**Untrusted PRs.** Reviews run your agent on the PR's code, description and
+comments. On a public repo, a stranger's PR can carry text written to steer
+an agent. The default prompts never merge or push without asking you, but
+mind what your agent may run unattended before reviewing PRs from outside
+your team.
+
 Fetches go over HTTPS with `gh`'s token, so they work without an SSH agent
 and despite `url.<ssh>.insteadOf` rewrites. Local clones are found as
 `<repoRoot>/<repo name>`; without one, the agent
@@ -219,8 +231,13 @@ The default prompts are plain instructions any agent can follow: reviews and
 re-checks work through `gh`, ships follow the release process the agent finds
 in the repo (README, CONTRIBUTING, CLAUDE.md, CI config) and always ask before
 merging, and tickets use `gh` for GitHub issues and the agent's own tools
-(MCP) for other trackers, or ask you to paste the ticket. If you have skills or slash commands for these, point the
-prompts at them, e.g. `"review": "/my-review {url}"`.
+(MCP) for other trackers, or ask you to paste the ticket.
+
+Skills or slash commands are nice to have, not needed: a review skill with
+your team's checklist gives more consistent reviews than the generic prompt,
+and a release skill knows your deploy steps instead of working them out from
+the repo each time. Point the prompts at them, e.g.
+`"review": "/my-review {url}"`, `"deploy": "/release {urls}"`.
 
 ### Trackers
 

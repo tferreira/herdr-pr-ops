@@ -3,7 +3,7 @@
 Versions follow [semantic versioning](https://semver.org). Before 1.0 the
 board, keys and config can still change between minor versions.
 
-## Unreleased
+## 0.8.2 - 2026-10-09
 
 ### Fixed
 - Resolving or reopening a review thread did not update the board until a

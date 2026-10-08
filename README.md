@@ -45,8 +45,8 @@ each one in the right checkout.
   agent's pane.
 - **Notifications** for new review requests, PRs to re-check, and approvals,
   change requests, CI failures, conflicts and questions on your PRs.
-- **Cheap on the GitHub API.** A light scan every 3 minutes costs about one
-  GraphQL point; full detail is fetched only for PRs that changed.
+- **Cheap on the GitHub API.** A light scan every 3 minutes costs about 7
+  GraphQL points; full detail is fetched only for PRs that changed.
 - **No dependencies.** Node 18+ and the GitHub CLI.
 
 <table>

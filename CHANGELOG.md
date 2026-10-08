@@ -3,6 +3,14 @@
 Versions follow [semantic versioning](https://semver.org). Before 1.0 the
 board, keys and config can still change between minor versions.
 
+## Unreleased
+
+### Fixed
+- Resolving or reopening a review thread did not update the board until a
+  full scan (`R`): a PR kept its `⁇ N TO ANSWER` badge and stayed in Needs
+  you. The light scan now also reads which threads are resolved, which
+  roughly doubles its cost, to about 7 GraphQL points.
+
 ## 0.8.1 - 2026-10-07
 
 ### Fixed

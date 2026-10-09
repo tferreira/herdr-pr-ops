@@ -288,6 +288,8 @@ plugin: it only draws the board.
 - **To answer** counts open review threads where someone else spoke last,
   plus top-level comments and comment-only reviews from others since your
   last push, comment or review. Bots are ignored.
+- **Changes requested** stops needing you once every reviewer who requested
+  changes has a pending review request again; the PR waits In review.
 - **CircleCI approval jobs** waiting "on hold" count as passing CI.
 - PRs you approved leave To review unless you are re-requested.
 - **In progress** holds work that has no PR yet: tasks started with `n`, and

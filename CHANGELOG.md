@@ -3,6 +3,15 @@
 Versions follow [semantic versioning](https://semver.org). Before 1.0 the
 board, keys and config can still change between minor versions.
 
+## 0.8.4 - 2026-10-09
+
+### Fixed
+- Stopping an agent (`x`) while it was still starting left the card on
+  `STARTING AGENT` for over a minute, then `LAUNCH FAILED`: the launch kept
+  waiting on the closed pane and retried it. Stopping now cancels the launch
+  and clears the card. `x` on a card that is still launching, with no agent
+  yet, cancels the launch; on a failed launch it clears the error.
+
 ## 0.8.3 - 2026-10-09
 
 ### Changed

@@ -3,6 +3,15 @@
 Versions follow [semantic versioning](https://semver.org). Before 1.0 the
 board, keys and config can still change between minor versions.
 
+## 0.8.5 - 2026-10-09
+
+### Fixed
+- `o` / `f` copied the link with `NO BROWSER ON THIS MACHINE` on a Mac in
+  front of you when the Herdr server had once been started over SSH: plugins
+  inherit that session's `SSH_*` variables long after it ends. With
+  `openLinks: "auto"`, links are now copied only while a remote login is
+  active (`who`).
+
 ## 0.8.4 - 2026-10-09
 
 ### Fixed

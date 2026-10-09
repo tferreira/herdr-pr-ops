@@ -1221,13 +1221,33 @@ function current() {
   return s && s.pr;
 }
 
+// SSH_* alone is not enough: a Herdr server started over SSH hands them to
+// every plugin process long after that session ended. Only count them while
+// someone is logged in remotely (`who` shows the host in parentheses; ":0"
+// is a local display, "tmux(...)" a multiplexer).
+let sshCheck = { at: 0, live: false };
+function sshLive() {
+  if (!process.env.SSH_CONNECTION && !process.env.SSH_TTY && !process.env.SSH_CLIENT) return false;
+  if (Date.now() - sshCheck.at < 60000) return sshCheck.live;
+  let live = true;
+  try {
+    const out = require("node:child_process").execFileSync("who", { encoding: "utf8", timeout: 2000 });
+    live = out.split("\n").some((l) => {
+      const host = (l.match(/\(([^)]*)\)\s*$/) || [])[1];
+      return !!host && !host.startsWith(":") && !host.startsWith("tmux");
+    });
+  } catch {}
+  sshCheck = { at: Date.now(), live };
+  return live;
+}
+
 // A machine without a display (plain SSH, a headless Linux server) has no
 // browser to open. `openLinks` in config overrides: auto, browser, copy.
 function noLocalBrowser() {
   const mode = U.config().openLinks || "auto";
   if (mode === "copy") return true;
   if (mode === "browser") return false;
-  if (process.env.SSH_CONNECTION || process.env.SSH_TTY || process.env.SSH_CLIENT) return true;
+  if (sshLive()) return true;
   return process.platform === "linux" && !process.env.DISPLAY && !process.env.WAYLAND_DISPLAY;
 }
 

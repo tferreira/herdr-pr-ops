@@ -3,6 +3,15 @@
 Versions follow [semantic versioning](https://semver.org). Before 1.0 the
 board, keys and config can still change between minor versions.
 
+## 0.8.3 - 2026-10-09
+
+### Changed
+- A PR with changes requested moves from Needs you to In review, as
+  `re-review requested`, once every reviewer who requested changes has a
+  pending review request again. GitHub keeps the PR on "changes requested"
+  until those reviewers approve, so it used to stay in Needs you while
+  waiting on them.
+
 ## 0.8.2 - 2026-10-09
 
 ### Fixed

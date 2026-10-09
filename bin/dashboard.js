@@ -481,9 +481,43 @@ function herdrTabOf(pane) {
 // x stops the card's agent: a first press arms, a second within 3 s fires.
 let stopArmed = null; // { pane, until }
 
+// Drop the card's launch: kill its launch.js and remove the entry, along with
+// the other PRs that launch carried. launch.js treats a missing entry as
+// cancelled, so a step it is already past cannot write it back.
+function cancelLaunch(url) {
+  const all = U.readJSON(U.paths.launches, {});
+  const L = all[url];
+  if (!L) return false;
+  if (L.state === "starting" && L.pid) {
+    try {
+      process.kill(L.pid, "SIGTERM");
+    } catch {}
+  }
+  for (const [k, o] of Object.entries(all)) if (k === url || (L.pid && o.pid === L.pid)) delete all[k];
+  U.writeJSON(U.paths.launches, all);
+  launches = all;
+  return true;
+}
+
 function stopAgent(pr) {
   const ag = agentFor(pr);
-  if (!ag) return say("NO AGENT ON THIS CARD", C.amber);
+  if (!ag) {
+    const L = launches[pr.url];
+    if (!L) return say("NO AGENT ON THIS CARD", C.amber);
+    if (L.state === "error") {
+      cancelLaunch(pr.url);
+      return say("◼ LAUNCH ERROR CLEARED", C.magenta);
+    }
+    const armKey = `launch:${pr.url}`;
+    if (!stopArmed || stopArmed.pane !== armKey || Date.now() > stopArmed.until) {
+      stopArmed = { pane: armKey, until: Date.now() + 3000 };
+      return say("x AGAIN TO CANCEL THE LAUNCH", C.red, 3000);
+    }
+    stopArmed = null;
+    if (DEMO) return say("DEMO MODE · WOULD CANCEL THE LAUNCH", C.violet);
+    cancelLaunch(pr.url);
+    return say("◼ LAUNCH CANCELLED", C.magenta);
+  }
   if (!stopArmed || stopArmed.pane !== ag.pane_id || Date.now() > stopArmed.until) {
     stopArmed = { pane: ag.pane_id, until: Date.now() + 3000 };
     const what = ag.agent_status === "working" ? "WORKING " : "";
@@ -500,6 +534,7 @@ function stopAgent(pr) {
   const args = [path.join(__dirname, "stop.js"), ag.pane_id, ...(sameTab ? ["--reopen"] : [])];
   if (sameTab) saveUi();
   spawn(process.execPath, args, { detached: true, stdio: "ignore", env: process.env }).unref();
+  cancelLaunch(pr.url);
   agents.delete(ag.pane_id);
   links = linkAgents(agents, data.prs, agentMap);
   work = buildWork();

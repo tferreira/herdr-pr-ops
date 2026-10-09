@@ -33,9 +33,15 @@ function setStatus(state, msg = "") {
   // Git and SSH errors carry \r and newlines that would garble the footer.
   msg = String(msg).replace(/[\x00-\x1f\x7f]+/g, " ").trim();
   const all = readJSON(paths.launches, {});
+  // The dashboard writes the entry before spawning us and drops it when the
+  // agent is stopped mid-launch: a missing entry means cancelled.
+  if (keys.some((k) => !all[k])) {
+    log(`${kind} ${keys.join(" ")} cancelled`);
+    process.exit(0);
+  }
   for (const k of keys) {
     if (state === "done") delete all[k];
-    else all[k] = { ...(all[k] || {}), kind, state, msg, at: new Date().toISOString() };
+    else all[k] = { ...all[k], kind, state, msg, pid: process.pid, at: new Date().toISOString() };
   }
   writeJSON(paths.launches, all);
 }
@@ -227,6 +233,8 @@ async function startAgent(name, pane) {
     } catch (e) {
       lastErr = e;
       log(`agent start attempt ${i + 1}:`, e.message);
+      // The pane was closed under us: retrying cannot bring it back.
+      if (/agent_pane_not_found/.test(e.message)) break;
       await sleep(1500);
     }
   }

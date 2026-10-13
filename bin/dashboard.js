@@ -351,9 +351,32 @@ function pollAgents() {
       const list = JSON.parse(out).result.agents || [];
       agents = new Map(list.map((a) => [a.pane_id, a]));
       links = linkAgents(agents, data.prs, agentMap);
+      saveTaskPrs();
       work = buildWork();
     } catch {}
   });
+}
+
+// A task's PR, once linked, is saved with the task: a PR on a branch the
+// agent renamed to stops counting once it ships (see taskPr in
+// lib/agentlink.js), and the card would fall back to "no PR yet".
+function saveTaskPrs() {
+  const found = {};
+  for (const [key, v] of Object.entries(agentMap)) {
+    if (!key.startsWith("task:") || !v.task || !v.meta) continue;
+    for (const [url, list] of links) {
+      if (url !== v.meta.pr && list.some((a) => a.pane_id === v.task)) found[key] = url;
+    }
+  }
+  if (!Object.keys(found).length) return;
+  const fresh = U.readJSON(U.paths.agents, {});
+  for (const [key, url] of Object.entries(found)) {
+    if (fresh[key] && fresh[key].meta && fresh[key].task === agentMap[key].task) fresh[key].meta.pr = url;
+  }
+  try {
+    U.writeJSON(U.paths.agents, fresh);
+    agentMap = fresh;
+  } catch {}
 }
 
 const URGENCY = { blocked: 0, done: 1, working: 2, idle: 3, unknown: 4 };

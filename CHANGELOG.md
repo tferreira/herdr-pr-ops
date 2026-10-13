@@ -3,6 +3,15 @@
 Versions follow [semantic versioning](https://semver.org). Before 1.0 the
 board, keys and config can still change between minor versions.
 
+## 0.8.6 - 2026-10-13
+
+### Fixed
+- A task stayed In progress with `NO PR YET` after its agent opened the PR
+  when the agent had renamed the branch (`PROJ-12` -> `PROJ-12-fix-login`).
+  A task now also links to the PR of the branch its worktree is on, if that
+  branch starts with the task's branch and its PR has not shipped. The PR is
+  saved with the task, so the link holds after the PR merges.
+
 ## 0.8.5 - 2026-10-09
 
 ### Fixed

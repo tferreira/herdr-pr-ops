@@ -3,6 +3,17 @@
 Versions follow [semantic versioning](https://semver.org). Before 1.0 the
 board, keys and config can still change between minor versions.
 
+## 0.9.0 - 2026-10-14
+
+### Added
+- `d` launches a rocket across the header: a 🚀 sparkles in after the
+  tagline, ignites, and flies a wobbly path off the right edge in white
+  smoke. It plays only when a deploy actually starts, and is gone at rest.
+
+### Fixed
+- Emoji in U+1F680-1F6C5 (🚀 and friends) were counted as one column,
+  shifting the rest of their line.
+
 ## 0.8.6 - 2026-10-13
 
 ### Fixed

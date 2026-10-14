@@ -474,6 +474,7 @@ function refresh(full = false) {
 function launch(kind, prs, reusePane) {
   if (!Array.isArray(prs)) prs = [prs];
   const names = prs.map((p) => `${p.repoName}#${p.number}`).join(" ");
+  if (kind === "deploy") header.launch(Date.now());
   if (DEMO) return say(`DEMO MODE · WOULD ${kind.toUpperCase()} ${names}`, C.violet);
   const all = U.readJSON(U.paths.launches, {});
   for (const p of prs) all[p.url] = { kind, state: "starting", msg: "queued", at: new Date().toISOString() };
@@ -781,12 +782,14 @@ function render() {
     : data.error
       ? [[`✕ SYNC ERROR ${ago(data.errorAt)}`, { fg: C.red, bold: true }]]
       : [["◉", { fg: pulse(C.green, C.bg, 2400) }], [` SYNC ${ago(data.fetchedAt) || "—"}`, { fg: C.mute }]];
+  const tagline = "pull request mission control";
   const text = [
-    { row: 1, x: Header.LOGO_END + 3, runs: [["pull request mission control", { fg: C.dim, italic: true }]] },
+    { row: 1, x: Header.LOGO_END + 3, runs: [[tagline, { fg: C.dim, italic: true }]] },
     { row: 1, x: -2, runs: [...agentChip(), [`@${data.me || "?"}   `, { fg: C.violet }], ...sync] },
     { row: 2, x: -2, runs: [...agentSummary(), [clock, { fg: C.mute }]] },
   ];
-  for (const l of header.render(W, Date.now(), text)) out.push(line(l));
+  const rocket = { x: Header.LOGO_END + 3 + tagline.length + 2, row: 1 };
+  for (const l of header.render(W, Date.now(), text, rocket)) out.push(line(l));
   if (setup) {
     renderSetup(out, W, H, line);
     return flush(out);
@@ -1746,6 +1749,8 @@ function main() {
       header.shoot = { start: now - 900, speed: 90, y0: 0.1, drop: 2.6 };
       header.shimmerAt = now - 400;
     }
+    // SNAP_LAUNCH=ms: the rocket launched ms ago (negative: launches later).
+    if (process.env.SNAP_LAUNCH) header.launch(Date.now() - Number(process.env.SNAP_LAUNCH));
     // SNAP_FRAMES=n: n frames SNAP_DT ms apart, separated by form feeds, for
     // the README GIF. The shooting star and the shimmer are timed into it.
     const frames = Number(process.env.SNAP_FRAMES || 0);

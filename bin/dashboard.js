@@ -467,7 +467,8 @@ function refresh(full = false) {
     } catch {}
   }
   data.refreshing = true;
-  if (full) say("◎ FULL SCAN", C.cyan, 1500);
+  if (data.authLost) say("✕ GH AUTH LOST · RUN gh auth status IN A PANE", C.red, 5000);
+  else if (full) say("◎ FULL SCAN", C.cyan, 1500);
 }
 
 // One agent for `prs` (several only for deploy, all from one repo).
@@ -780,7 +781,7 @@ function render() {
   const sync = syncing
     ? [[`${SWEEP[tick % 4]} SCANNING`, { fg: C.cyan, bold: true }]]
     : data.error
-      ? [[`✕ SYNC ERROR ${ago(data.errorAt)}`, { fg: C.red, bold: true }]]
+      ? [[`✕ ${data.authLost ? "GH AUTH LOST" : "SYNC ERROR"} ${ago(data.errorAt)}`, { fg: C.red, bold: true }]]
       : [["◉", { fg: pulse(C.green, C.bg, 2400) }], [` SYNC ${ago(data.fetchedAt) || "—"}`, { fg: C.mute }]];
   const tagline = "pull request mission control";
   const text = [

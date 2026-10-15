@@ -8,7 +8,7 @@
 
 const fs = require("node:fs");
 const { paths, readJSON, writeJSON, config, log, herdr, daemonPid } = require("../lib/util");
-const { fetchAll } = require("../lib/github");
+const { fetchAll, isAuthError } = require("../lib/github");
 
 if (daemonPid() && daemonPid() !== process.pid) process.exit(0);
 writeJSON(paths.pid, process.pid);
@@ -75,10 +75,12 @@ async function poll(full = false) {
     failures = 0;
     log(`scan${full ? " (full)" : ""}: ${next.prs.length} PRs, refetched ${next.rate.refetched}, cost ${next.rate.cost}, ${next.rate.remaining} points left`);
   } catch (e) {
-    failures++;
-    log("poll failed:", e.message);
+    const authLost = isAuthError(e.message);
+    // Lost auth is not load: keep the normal pace so a fixed login shows soon.
+    if (!authLost) failures++;
+    log(authLost ? "gh auth lost:" : "poll failed:", e.message);
     const cur = readJSON(paths.cache, {}) || {};
-    writeJSON(paths.cache, { ...cur, refreshing: false, error: e.message, errorAt: new Date().toISOString() });
+    writeJSON(paths.cache, { ...cur, refreshing: false, error: e.message, errorAt: new Date().toISOString(), authLost });
   } finally {
     running = false;
     schedule();

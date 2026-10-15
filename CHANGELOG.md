@@ -3,6 +3,15 @@
 Versions follow [semantic versioning](https://semver.org). Before 1.0 the
 board, keys and config can still change between minor versions.
 
+## 0.9.1 - 2026-10-15
+
+### Fixed
+- When gh stopped sending a token (seen right after a `gh auth login`), the
+  header showed a bare `SYNC ERROR` while GitHub rate-limited the office IP,
+  and each failed scan doubled the wait, up to 30 minutes. The header now
+  says `GH AUTH LOST`, `r` points to `gh auth status`, and scans keep their
+  normal pace so a fixed login shows on the next one.
+
 ## 0.9.0 - 2026-10-14
 
 ### Added

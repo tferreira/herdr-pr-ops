@@ -64,7 +64,7 @@ const DEMO = process.argv.includes("--demo");
 const demo = DEMO ? require("../lib/demo") : null;
 let data = DEMO ? demo.data() : U.readJSON(U.paths.cache, null) || { prs: [] };
 const ui = Object.assign(
-  { tab: "review", sel: {}, snoozed: {}, showSnoozed: false },
+  { tab: "review", sel: {}, snoozed: {}, showSnoozed: false, titles: {} },
   DEMO ? {} : U.readJSON(U.paths.ui, {}),
 );
 // The agent new launches start: `a` switches between the installed ones.
@@ -76,6 +76,8 @@ let agentMap = U.readJSON(U.paths.agents, {});
 let launches = U.readJSON(U.paths.launches, {});
 let filter = "";
 let filterMode = false;
+// Renaming an in-progress card: { key, input }. Names live in ui.titles.
+let rename = null;
 let help = false;
 let toast = null; // { text, color, until }
 let scroll = 0;
@@ -212,7 +214,12 @@ let work = []; // in-progress cards: agents on a branch with no PR yet
 
 const DEFAULT_BRANCHES = new Set(["main", "master", "develop", "dev", "trunk"]);
 
+// A card's own name (e), kept per repo and ticket so it survives agent
+// restarts. Empty means the agent's terminal title, as before.
 function workItem(a, m) {
+  const repo = m.repo || `?/${m.repoName}`;
+  const titleKey = `${repo.toLowerCase()}#${m.id}`;
+  const autoTitle = a.terminal_title_stripped || m.title || m.branch || m.id;
   return {
     url: `work:${a.pane_id}`,
     work: true,
@@ -220,8 +227,10 @@ function workItem(a, m) {
     ticket: m.id,
     ticketLabel: m.label || null,
     ticketUrl: m.url || null,
-    title: a.terminal_title_stripped || m.title || m.branch || m.id,
-    repo: m.repo || `?/${m.repoName}`,
+    title: ui.titles[titleKey] || autoTitle,
+    autoTitle,
+    titleKey,
+    repo,
     repoName: m.repoName || "?",
     headRef: m.branch || "",
     author: data.me,
@@ -276,6 +285,26 @@ function branchShipped(repo, branch) {
   return known;
 }
 
+// A card's name is only needed until its PR exists: the PR card shows the
+// PR's title. Dropped once an open PR in the repo has the ticket in its
+// branch or title.
+function forgetTitles() {
+  let gone = false;
+  for (const key of Object.keys(ui.titles)) {
+    const i = key.indexOf("#");
+    const repo = key.slice(0, i);
+    const id = key.slice(i + 1).toLowerCase();
+    const open = data.prs.some(
+      (p) => (!p.quiet || p.quiet.kind === "approved") && p.repo.toLowerCase() === repo && `${p.headRef} ${p.title}`.toLowerCase().includes(id),
+    );
+    if (open) {
+      delete ui.titles[key];
+      gone = true;
+    }
+  }
+  if (gone) saveUi();
+}
+
 // Agents not on any PR: tasks started with n, and agents working on a
 // feature branch (not main/master) of one of your orgs' repos that has no
 // PR on the board yet. Agents elsewhere (home, other repos) are left out.
@@ -287,6 +316,7 @@ function buildWork() {
   // Merged and closed PRs left out: an agent on their branch that is not
   // linked to them is on something else (see branchShipped).
   const prBranches = new Set(data.prs.filter((p) => !p.quiet || p.quiet.kind === "approved").map((p) => `${p.repo.toLowerCase()}#${p.headRef}`));
+  forgetTitles();
   const out = [];
   const taken = new Set();
   for (const [key, v] of Object.entries(agentMap)) {
@@ -948,7 +978,7 @@ function actionKeys(sel, key) {
   const pr = sel && sel.pr;
   if (pr && pr.work && pr.launchState === "error") return key(" ↵ ", "RETRY") + key(" o ", "TICKET", !!pr.ticketUrl);
   if (pr && pr.work && pr.launchState) return key(" ↵ ", "STARTING", false);
-  if (pr && pr.work) return key(" ↵ ", "JUMP") + key(" x ", "STOP") + key(" o ", pr.ticketUrl ? "TICKET" : "OPEN", !!pr.ticketUrl);
+  if (pr && pr.work) return key(" ↵ ", "JUMP") + key(" x ", "STOP") + key(" o ", pr.ticketUrl ? "TICKET" : "OPEN", !!pr.ticketUrl) + key(" e ", "RENAME");
   const ag = pr && agentFor(pr);
   const act = pr && !ag ? enterAction(pr) : null;
   const enterIs = (kind) => act && act.kind === kind;
@@ -982,7 +1012,8 @@ function footerLines(sel, W, base) {
           (ag ? S(`  ⌁ agent ${ag.agent_status} in ${ag.pane_id}`, { fg: C.magenta, bg: C.bg }) : ""),
       ),
     );
-    lines.push(line(S("   " + pr.title, { fg: C.text, bg: C.bg })));
+    if (rename) lines.push(line(S(" ✎ ", { fg: C.amber, bg: C.bg, bold: true }) + S(rename.input + (tick % 8 < 4 ? "▏" : " "), { fg: C.white, bg: C.bg, bold: true })));
+    else lines.push(line(S("   " + pr.title, { fg: C.text, bg: C.bg })));
     lines.push(line(S(`   in progress · no PR yet${pr.ticketUrl ? " · " + pr.ticketUrl : ""}`, { fg: C.mute, bg: C.bg })));
   } else if (sel) {
     const pr = sel.pr;
@@ -1016,8 +1047,9 @@ function footerLines(sel, W, base) {
   // key bar + toast ──
   const key = (k, label, on = true) =>
     S(`${k}`, { fg: on ? C.bg : C.dim, bg: on ? C.cyan : C.line, bold: true }) + S(` ${label}  `, { fg: on ? C.text : C.dim, bg: C.bg });
-  const keys =
-    S(" ", { bg: C.bg }) +
+  const keys = rename
+    ? S(" ", { bg: C.bg }) + key(" ↵ ", "SAVE (EMPTY: AGENT'S TITLE)") + key(" ^U ", "CLEAR") + key(" esc ", "CANCEL")
+    : S(" ", { bg: C.bg }) +
     actionKeys(sel, key) +
     (sel && sel.pr.work ? "" : key(" o ", "OPEN") + key(" f ", "FILES") + key(" z ", "SNOOZE")) +
     key(" / ", "FILTER") +
@@ -1041,6 +1073,7 @@ function overlayHelp(out, W, H) {
     ["space", "mark for a multi-deploy (alt+click too); d ships all"],
     ["enter", "jump to the PR's agent; none yet: review / re-check / status report"],
     ["x x", "stop the card's agent (press twice); the PR stays"],
+    ["e", "rename an in-progress card (empty: the agent's title)"],
     ["o / f", "open PR / files changed in the browser"],
     ["y", "copy PR url (to the screen you look at, also over --remote)"],
     ["z / s", "snooze until the PR changes / show snoozed"],
@@ -1127,6 +1160,21 @@ function taskKey(k) {
     task.repoFilter += k;
     task.repoIdx = 0;
   }
+}
+
+function renameKey(k) {
+  if (k === "\x1b") rename = null;
+  else if (k === "\r") {
+    const t = rename.input.trim();
+    if (t) ui.titles[rename.key] = t;
+    else delete ui.titles[rename.key];
+    saveUi();
+    for (const w of work) if (w.titleKey === rename.key) w.title = t || w.autoTitle;
+    rename = null;
+    say(t ? "✎ RENAMED" : "✎ AGENT'S TITLE BACK", C.violet, 1500);
+  } else if (k === "\x7f") rename.input = rename.input.slice(0, -1);
+  else if (k === "\x15") rename.input = "";
+  else if (k.length === 1 && k >= " ") rename.input += k;
 }
 
 function launchTask(t) {
@@ -1566,6 +1614,7 @@ function renderSetup(out, W, H, line) {
 function onKey(k) {
   if (setup) return setupKey(k);
   if (DEBUG_INPUT && k.startsWith("\x1b") && !k.startsWith("\x1b[<")) U.log("key", JSON.stringify(k));
+  if (rename) return renameKey(k);
   if (k.startsWith("\x1b[<")) return onMouse(k);
   if (task) return taskKey(k);
   if (filterMode) {
@@ -1659,6 +1708,10 @@ function onKey(k) {
       return openLink(pr.ticketUrl, "TICKET");
     }
     if (k === "x" && !pr.launchState) return stopAgent(pr);
+    if (k === "e" && !pr.launchState) {
+      rename = { key: pr.titleKey, input: pr.title };
+      return;
+    }
     if ("rcdfz ".includes(k)) return say("NO PR YET · ↵ JUMPS TO THE AGENT", C.amber);
     return;
   }

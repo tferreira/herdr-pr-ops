@@ -120,6 +120,7 @@ for what changed); remove with the `remove-keybinding` action, then
 | `d` | ship an approved PR (CI green, nothing to answer, no conflict), or every marked PR |
 | `space`, alt+click | mark a ready PR for a multi-ship; marks are numbered in shipping order, `esc` clears them |
 | `x` `x` | stop the card's agent (press twice). The PR stays on the board; see below for what is cleaned up |
+| `e` | rename an In progress card (no PR yet). `ctrl+u` clears; saving it empty brings back the agent's own title. The name is forgotten once the card's PR is open |
 | `enter` | jump to the PR's agent. No agent yet: review a new PR, re-check one with news since your review, or on your own PR a report-only status check (feedback, CI, conflicts). Does nothing on PRs waiting on their author |
 | `o` / `f` | open the PR / its changed files in the browser |
 | `y` | copy the PR URL (to the screen you look at, also over `herdr --remote`) |

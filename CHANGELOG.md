@@ -3,6 +3,16 @@
 Versions follow [semantic versioning](https://semver.org). Before 1.0 the
 board, keys and config can still change between minor versions.
 
+## 0.10.0 - 2026-10-29
+
+### Added
+- `e` renames an In progress card. Until a PR exists, the card shows the
+  agent's terminal title, which can stay a bare `CORE-123 YouTrack issue`
+  for days. The name is kept per repo and ticket in `ui.json`, so it
+  survives agent restarts, and dropped once an open PR in the repo has the
+  ticket in its branch or title (the PR card shows the PR's title). Saving
+  it empty brings back the agent's title.
+
 ## 0.9.1 - 2026-10-15
 
 ### Fixed

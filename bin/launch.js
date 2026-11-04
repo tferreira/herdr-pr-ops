@@ -15,7 +15,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { checkoutInfo } = require("../lib/gitinfo");
-const { paths, readJSON, writeJSON, config, log, herdr, sh, localRepoPath, HOME, fill, promptsFor } = require("../lib/util");
+const { paths, readJSON, writeJSON, config, log, herdr, sh, localRepoPath, expand, fill, promptsFor } = require("../lib/util");
 
 const argv = process.argv.slice(2);
 const paneFlag = argv.indexOf("--pane");
@@ -114,31 +114,71 @@ function rootPane(result) {
 // The URL names port 443 so a common `url.git@github.com:.insteadOf
 // https://github.com/` rule does not turn it back into SSH, and the token
 // travels in git's environment config, never in argv.
+const GH_BASE = "https://github.com:443/";
 let ghToken = null;
-function fetchGh(repoPath, nameWithOwner, refspecs) {
+function ghEnv() {
   if (!ghToken) ghToken = sh("gh", ["auth", "token"]).trim();
-  const base = "https://github.com:443/";
   const auth = Buffer.from(`x-access-token:${ghToken}`).toString("base64");
-  const env = {
+  return {
     ...process.env,
     GIT_TERMINAL_PROMPT: "0",
     GIT_CONFIG_COUNT: "1",
-    GIT_CONFIG_KEY_0: `http.${base}.extraHeader`,
+    GIT_CONFIG_KEY_0: `http.${GH_BASE}.extraHeader`,
     GIT_CONFIG_VALUE_0: `Authorization: Basic ${auth}`,
   };
+}
+
+function fetchGh(repoPath, nameWithOwner, refspecs) {
   try {
-    sh("git", ["-C", repoPath, "fetch", "--quiet", `${base}${nameWithOwner}.git`, ...refspecs], { env });
+    sh("git", ["-C", repoPath, "fetch", "--quiet", `${GH_BASE}${nameWithOwner}.git`, ...refspecs], { env: ghEnv() });
   } catch (e) {
     throw new Error(`git fetch ${nameWithOwner}: ${e.message.split(": ").slice(-1)[0]}`);
   }
 }
 
+// The local clone of a PR's repo, cloned into the first repoRoots folder that
+// exists when there is none. Starting the agent elsewhere (~) does not work:
+// Claude Code stops on its "trust this folder?" prompt in a folder you never
+// opened it in, and the launch fails as not ready. The clone goes over HTTPS
+// with gh's token like fetches, then origin is set to the URL a `gh repo
+// clone` would give (gh's git_protocol), so pushing from it later works as
+// from your other clones.
+function ensureClone(nameWithOwner) {
+  const found = localRepoPath(nameWithOwner);
+  if (found) return found;
+  const roots = config().repoRoots.map(expand);
+  const root = roots.find((r) => {
+    try {
+      return fs.statSync(r).isDirectory();
+    } catch {
+      return false;
+    }
+  });
+  if (!root) throw new Error(`no clone of ${nameWithOwner} and no repoRoots folder exists (${roots.join(", ")})`);
+  const name = nameWithOwner.split("/")[1];
+  const dest = path.join(root, name);
+  if (fs.existsSync(dest)) throw new Error(`${dest} exists but is not a git clone, move it or set repos in config`);
+  setStatus("starting", `cloning ${nameWithOwner}`);
+  log(`no local clone for ${nameWithOwner}, cloning into ${dest}`);
+  try {
+    sh("git", ["clone", "--quiet", `${GH_BASE}${nameWithOwner}.git`, dest], { env: ghEnv() });
+  } catch (e) {
+    throw new Error(`git clone ${nameWithOwner}: ${e.message.split(": ").slice(-1)[0]}`);
+  }
+  let protocol = "https";
+  try {
+    protocol = sh("gh", ["config", "get", "git_protocol", "-h", "github.com"]).trim() || "https";
+  } catch {}
+  const origin = protocol === "ssh" ? `git@github.com:${nameWithOwner}.git` : `https://github.com/${nameWithOwner}.git`;
+  sh("git", ["-C", dest, "remote", "set-url", "origin", origin]);
+  return dest;
+}
+
 // My own PR: an existing checkout of its branch (moved to origin's head when
 // clean), or a new worktree of it.
 function addressPane(pr) {
-  const repo = localRepoPath(pr.repo);
+  const repo = ensureClone(pr.repo);
   const label = `${pr.repoName}#${pr.number}`;
-  if (!repo) return rootPane(herdr(["workspace", "create", "--cwd", HOME, "--label", label, "--no-focus"]));
   const branch = pr.headRef;
   setStatus("starting", "fetching branch");
   fetchGh(repo, pr.repo, [`+refs/heads/${branch}:refs/remotes/origin/${branch}`]);
@@ -172,12 +212,8 @@ function addressPane(pr) {
 }
 
 function reviewPane(pr) {
-  const repo = localRepoPath(pr.repo);
+  const repo = ensureClone(pr.repo);
   const label = `${pr.repoName}#${pr.number}`;
-  if (!repo) {
-    log(`no local clone for ${pr.repo}, reviewing from ~`);
-    return rootPane(herdr(["workspace", "create", "--cwd", HOME, "--label", label, "--no-focus"]));
-  }
   const branch = `pr-${pr.number}`;
   const ref = `refs/remotes/origin/pr/${pr.number}`;
   setStatus("starting", "fetching PR head");
@@ -208,7 +244,7 @@ function reviewPane(pr) {
 
 function deployPane(prs) {
   const pr = prs[0];
-  const repo = localRepoPath(pr.repo) || HOME;
+  const repo = ensureClone(pr.repo);
   const label = `deploy ${prs.map((p) => `#${p.number}`).join(" ")}`;
   let ws = null;
   try {

@@ -3,6 +3,17 @@
 Versions follow [semantic versioning](https://semver.org). Before 1.0 the
 board, keys and config can still change between minor versions.
 
+## 0.10.2 - 2026-11-04
+
+### Fixed
+- A review, re-check, fix or deploy on a repo with no local clone started the
+  agent in `~`, where Claude Code stops on its "trust this folder?" prompt,
+  so the launch failed as not ready. The repo is now cloned into the first
+  `repoRoots` folder that exists (over HTTPS with `gh`'s token, `origin` set
+  to gh's `git_protocol`), and the agent starts in a worktree of it as for
+  any other repo. With no `repoRoots` folder on disk, the launch fails saying
+  so.
+
 ## 0.10.1 - 2026-11-04
 
 ### Fixed

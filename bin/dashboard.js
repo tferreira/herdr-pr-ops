@@ -1572,7 +1572,7 @@ function renderSetup(out, W, H, line) {
     });
     push();
     push(label("CLONES") + S("where your repos live, so agents start in the right one", { fg: C.mute, bg: C.bg }));
-    if (!r.clones.length) push(indent + S("  none found under ~ · agents will start in ~ and work through gh", { fg: C.dim, bg: C.bg }));
+    if (!r.clones.length) push(indent + S("  none found under ~ · repos get cloned into the first repoRoots folder that exists", { fg: C.dim, bg: C.bg }));
     r.clones.forEach((c, i) => {
       const note = c.matching ? `${c.matching} repo${c.matching === 1 ? "" : "s"} from your orgs` : `${c.count} other repos`;
       push(indent + pointer(mark("clone", i)) + box(c.checked) + S(c.dir.padEnd(22), { fg: C.white, bg: C.bg, bold: mark("clone", i) }) + S(note, { fg: C.mute, bg: C.bg }));

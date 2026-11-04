@@ -181,8 +181,9 @@ your team.
 
 Fetches go over HTTPS with `gh`'s token, so they work without an SSH agent
 and despite `url.<ssh>.insteadOf` rewrites. Local clones are found as
-`<repoRoot>/<repo name>`; without one, the agent
-starts in your home directory and works from `gh`.
+`<repoRoot>/<repo name>`; without one, the repo is cloned into the first
+`repoRoots` folder that exists before the agent starts, with `origin` set the
+way `gh repo clone` would (`gh config get git_protocol`).
 
 ## Settings
 

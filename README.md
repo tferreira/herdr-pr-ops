@@ -262,7 +262,7 @@ the repo each time. Point the prompts at them, e.g.
 | Jira | any `…/browse/PROJ-12` URL | `PROJ-12`, `<clone>-proj12` |
 | Linear | `https://linear.app/<team>/issue/ENG-12…` | `ENG-12`, `<clone>-eng12` |
 | YouTrack | any `…/issue/PROJ-12` URL | `PROJ-12`, `<clone>-proj12` |
-| Sentry | `…sentry.io/issues/123`, short IDs like `API-1A` | `API-1A`, `<clone>-1a` |
+| Sentry | `…sentry.io/issues/123`, short IDs like `API-1A` or `MY-API-1A` | `API-1A`, `<clone>-1a` |
 | yours | `trackers` entries: `urlPattern` (group 1 = id), `idPattern`, `link` (`{id}`), `prompt` | |
 
 A bare `PROJ-123` could be Jira, Linear or YouTrack: it goes to

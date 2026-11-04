@@ -3,6 +3,17 @@
 Versions follow [semantic versioning](https://semver.org). Before 1.0 the
 board, keys and config can still change between minor versions.
 
+## 0.10.1 - 2026-11-04
+
+### Fixed
+- A task whose agent renamed its branch to a name that does not start with
+  the task's branch (`sentry-123` -> `fix-login`) stayed on `NO PR YET` after
+  its PR opened. A PR on the branch of the task's own worktree now links,
+  whatever the branch is called.
+- Sentry short IDs whose project slug has dashes (`MY-API-1A`) were not
+  recognised as Sentry issues. The suffix now follows the last dash, and the
+  project used to pick the repo is the full slug (`my-api`).
+
 ## 0.10.0 - 2026-10-29
 
 ### Added

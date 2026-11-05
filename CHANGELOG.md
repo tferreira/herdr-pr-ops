@@ -3,6 +3,17 @@
 Versions follow [semantic versioning](https://semver.org). Before 1.0 the
 board, keys and config can still change between minor versions.
 
+## 0.10.3 - 2026-11-05
+
+### Fixed
+- A launch whose agent never came up still showed as started. A codex that
+  macOS holds at launch (seen after Homebrew upgrades) leaves only its
+  command line in the pane, which Herdr reads as an idle codex, so the
+  prompt sat under it with nothing running. The prompt is now sent with
+  Herdr's `--wait`: when the agent shows no sign of working within 25
+  seconds, the launch fails with "codex did not react to the prompt, it may
+  be stuck starting: check that `codex --version` runs".
+
 ## 0.10.2 - 2026-11-04
 
 ### Fixed

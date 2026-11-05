@@ -277,6 +277,28 @@ async function startAgent(name, pane) {
   throw lastErr;
 }
 
+// `agent start` can report a ready agent that never came up: a codex binary
+// that macOS holds at launch leaves its command line as the terminal title,
+// which herdr reads as an idle codex, and the prompt lands in a frozen
+// terminal while the launch looks fine. With --wait, herdr fails with
+// agent_prompt_stalled when no working or blocked state follows within 5s;
+// a slow agent gets another 20s before the launch fails.
+function promptAgent(pane, text, agent) {
+  const busy = ["--until", "working", "--until", "blocked"];
+  try {
+    herdr(["agent", "prompt", pane, text, "--wait", ...busy, "--timeout", "15000"], { timeout: 20000 });
+    return;
+  } catch (e) {
+    if (!/agent_prompt_stalled|timeout/.test(e.message)) throw e;
+    log(`${pane}: ${e.message}`);
+  }
+  try {
+    herdr(["agent", "wait", pane, ...busy, "--timeout", "20000"], { timeout: 25000 });
+  } catch {
+    throw new Error(`${agent} did not react to the prompt, it may be stuck starting: check that \`${agent} --version\` runs`);
+  }
+}
+
 // Task worktrees start from the remote default branch, not whatever the
 // main checkout happens to have checked out. An existing branch or worktree
 // for the ticket is reused.
@@ -337,7 +359,7 @@ async function runTask(t) {
   const custom = (cfg.trackers || []).find((x) => x.name === t.kind);
   const tpl = (custom && custom.prompt) || P[t.kind] || P.ticket;
   const text = fill(tpl, { id: t.id, label: t.label, url: t.url || "", urlNote: t.url ? ` (${t.url})` : "" });
-  herdr(["agent", "prompt", pane, text]);
+  promptAgent(pane, text, agentKind);
   setStatus("done");
   herdr(["notification", "show", `${t.label} task started`, "--body", `${t.id} in ${t.repoName}`, "--sound", "none"]);
   log(`task ${t.id} started in ${pane}`);
@@ -360,7 +382,7 @@ async function main() {
     if (!["idle", "done"].includes(live.agent_status)) {
       throw new Error(`agent is ${live.agent_status}, press enter to go to it`);
     }
-    herdr(["agent", "prompt", live.pane_id, prompts(prs, live.agent)]);
+    promptAgent(live.pane_id, prompts(prs, live.agent), live.agent);
     setStatus("done");
     return;
   }
@@ -375,7 +397,7 @@ async function main() {
   for (const k of keys) fresh[k] = { ...(fresh[k] || {}), [slot]: pane };
   writeJSON(paths.agents, fresh);
 
-  herdr(["agent", "prompt", pane, prompts(prs, agentKind)]);
+  promptAgent(pane, prompts(prs, agentKind), agentKind);
   setStatus("done");
   log(`${kind} (${agentKind}) started for ${keys.join(" ")} in ${pane}`);
 }

@@ -483,6 +483,14 @@ function pollFiles() {
     }
   } catch {}
   launches = U.readJSON(U.paths.launches, {});
+  // A launch that failed because its agent did not react to the prompt
+  // recovers on its own when that agent gets going after all (you pressed
+  // Enter in its pane, or it was only slow).
+  for (const [key, L] of Object.entries(launches)) {
+    if (L.state !== "error" || !L.stalledPane) continue;
+    const a = agents.get(L.stalledPane);
+    if (a && ["working", "blocked", "done"].includes(a.agent_status)) cancelLaunch(key);
+  }
   if (agents.size) work = buildWork();
 }
 

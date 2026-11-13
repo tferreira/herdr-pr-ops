@@ -29,7 +29,7 @@ const keys = task ? [`task:${task.id}`] : [arg, ...more];
 const url = keys[0];
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-function setStatus(state, msg = "") {
+function setStatus(state, msg = "", extra = {}) {
   // Git and SSH errors carry \r and newlines that would garble the footer.
   msg = String(msg).replace(/[\x00-\x1f\x7f]+/g, " ").trim();
   const all = readJSON(paths.launches, {});
@@ -41,7 +41,7 @@ function setStatus(state, msg = "") {
   }
   for (const k of keys) {
     if (state === "done") delete all[k];
-    else all[k] = { ...all[k], kind, state, msg, pid: process.pid, at: new Date().toISOString() };
+    else all[k] = { ...all[k], kind, state, msg, pid: process.pid, at: new Date().toISOString(), ...extra };
   }
   writeJSON(paths.launches, all);
 }
@@ -283,6 +283,11 @@ async function startAgent(name, pane) {
 // terminal while the launch looks fine. With --wait, herdr fails with
 // agent_prompt_stalled when no working or blocked state follows within 5s;
 // a slow agent gets another 20s before the launch fails.
+//
+// A stall is more often an agent that is up with the prompt typed in its
+// input box but not submitted (the Enter came before it was listening). So a
+// stalled agent that still reads as idle gets one Enter. An agent at an
+// approval or trust dialog reads as blocked and is never sent a key.
 function promptAgent(pane, text, agent) {
   const busy = ["--until", "working", "--until", "blocked"];
   try {
@@ -293,9 +298,21 @@ function promptAgent(pane, text, agent) {
     log(`${pane}: ${e.message}`);
   }
   try {
+    const live = liveAgent(pane);
+    if (live && ["idle", "done"].includes(live.agent_status)) {
+      herdr(["agent", "send-keys", pane, "enter"], { timeout: 5000 });
+      log(`${pane}: prompt not taken, pressed enter`);
+    }
+  } catch (e) {
+    log(`${pane}: enter not sent: ${e.message}`);
+  }
+  try {
     herdr(["agent", "wait", pane, ...busy, "--timeout", "20000"], { timeout: 25000 });
   } catch {
-    throw new Error(`${agent} did not react to the prompt, it may be stuck starting: check that \`${agent} --version\` runs`);
+    const err = new Error(`${agent} did not react to the prompt, it may be stuck starting: check that \`${agent} --version\` runs`);
+    // The dashboard drops this error once the agent in the pane gets going.
+    err.stalledPane = pane;
+    throw err;
   }
 }
 
@@ -404,7 +421,7 @@ async function main() {
 
 main().catch((e) => {
   log(`${kind} ${keys.join(" ")} failed:`, e.message);
-  setStatus("error", e.message.split("\n")[0].slice(0, 200));
+  setStatus("error", e.message.split("\n")[0].slice(0, 200), e.stalledPane ? { stalledPane: e.stalledPane } : {});
   try {
     herdr(["notification", "show", `${kind} failed`, "--body", e.message.slice(0, 200), "--sound", "none"]);
   } catch {}

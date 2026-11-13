@@ -3,6 +3,17 @@
 Versions follow [semantic versioning](https://semver.org). Before 1.0 the
 board, keys and config can still change between minor versions.
 
+## 0.10.4 - 2026-11-13
+
+### Fixed
+- A launch could fail with "did not react to the prompt" while the agent was
+  up, with the prompt typed in its input box and only Enter missing. A
+  stalled agent that still reads as idle now gets one Enter before the
+  launch gives up (never one at an approval or trust dialog, which reads as
+  blocked).
+- That failure stayed on the card after you pressed Enter in the pane
+  yourself. It now clears as soon as the agent in that pane is working.
+
 ## 0.10.3 - 2026-11-05
 
 ### Fixed

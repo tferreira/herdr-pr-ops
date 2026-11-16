@@ -3,6 +3,14 @@
 Versions follow [semantic versioning](https://semver.org). Before 1.0 the
 board, keys and config can still change between minor versions.
 
+## 0.10.5 - 2026-11-16
+
+### Fixed
+- A PR where you are still a requested reviewer by name showed as waiting on
+  its author once you had replied in a thread: GitHub counts the reply as a
+  review but keeps the request open. Such a PR now stays in Re-check, tagged
+  "still requested", until the request is gone.
+
 ## 0.10.4 - 2026-11-13
 
 ### Fixed

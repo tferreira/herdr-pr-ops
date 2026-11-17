@@ -3,6 +3,14 @@
 Versions follow [semantic versioning](https://semver.org). Before 1.0 the
 board, keys and config can still change between minor versions.
 
+## 0.10.6 - 2026-11-17
+
+### Fixed
+- An agent started by hand in a worktree on its own branch left In progress
+  and showed on another PR once it had reviewed or discussed that PR (say,
+  after a `/review <url>` in its pane). Such an agent now stays on its
+  branch; only its terminal title can still link it to another PR.
+
 ## 0.10.5 - 2026-11-16
 
 ### Fixed

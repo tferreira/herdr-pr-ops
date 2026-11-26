@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 "use strict";
 
-// launch.js <review|recheck|status|address|deploy> <pr-url> [<pr-url>...] [--pane <id>] [--agent <kind>]
+// launch.js <review|recheck|status|address|open|deploy> <pr-url> [<pr-url>...] [--pane <id>] [--agent <kind>]
+//   open: an agent in the PR's checkout with no prompt (enter on your own PR).
 //   several urls: deploy only, one repo. --pane: an agent already on the PR
 //   (picked by the dashboard), prompted instead of starting a new one when idle.
 //   --agent: the Herdr agent kind to start (default: agentKind).
@@ -371,6 +372,13 @@ async function runTask(t) {
     meta: { kind: t.kind, label: t.label, id: t.id, url: t.url, repoName: t.repoName, repo: (checkoutInfo(t.repoPath) || {}).repo, branch },
   };
   writeJSON(paths.agents, fresh);
+  // A blank agent starts with nothing to do: you type the first prompt.
+  if (t.kind === "blank") {
+    setStatus("done");
+    herdr(["notification", "show", "Blank agent started", "--body", `${branch} in ${t.repoName}`, "--sound", "none"]);
+    log(`blank agent on ${branch} started in ${pane}`);
+    return;
+  }
   const cfg = config();
   const P = promptsFor(agentKind);
   const custom = (cfg.trackers || []).find((x) => x.name === t.kind);
@@ -390,7 +398,8 @@ async function main() {
   if (missing.length) throw new Error(`PR not in cache: ${missing.join(" ")}`);
   if (new Set(prs.map((p) => p.repo)).size > 1) throw new Error("one launch per repo");
   const pr = prs[0];
-  const slot = kind === "deploy" ? "deploy" : kind === "address" || kind === "status" ? "work" : "review";
+  const own = kind === "address" || kind === "status" || kind === "open";
+  const slot = kind === "deploy" ? "deploy" : own ? "work" : "review";
   const agents = readJSON(paths.agents, {});
   const known = agents[url] && agents[url][slot];
 
@@ -399,6 +408,7 @@ async function main() {
     if (!["idle", "done"].includes(live.agent_status)) {
       throw new Error(`agent is ${live.agent_status}, press enter to go to it`);
     }
+    if (kind === "open") return setStatus("done");
     promptAgent(live.pane_id, prompts(prs, live.agent), live.agent);
     setStatus("done");
     return;
@@ -406,7 +416,7 @@ async function main() {
 
   setStatus("starting", "opening pane");
   const pane =
-    kind === "deploy" ? deployPane(prs) : kind === "address" || kind === "status" ? addressPane(pr) : reviewPane(pr);
+    kind === "deploy" ? deployPane(prs) : own ? addressPane(pr) : reviewPane(pr);
   setStatus("starting", "starting agent");
   await startAgent(agentName(prs), pane);
 
@@ -414,7 +424,7 @@ async function main() {
   for (const k of keys) fresh[k] = { ...(fresh[k] || {}), [slot]: pane };
   writeJSON(paths.agents, fresh);
 
-  promptAgent(pane, prompts(prs, agentKind), agentKind);
+  if (kind !== "open") promptAgent(pane, prompts(prs, agentKind), agentKind);
   setStatus("done");
   log(`${kind} (${agentKind}) started for ${keys.join(" ")} in ${pane}`);
 }

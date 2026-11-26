@@ -29,13 +29,13 @@ each one in the right checkout.
   | **Mine** | In progress (agents on a branch with no PR yet) → Needs you (changes requested, comments to answer, CI failed, conflict) → In review → Ready to ship |
   | **To review** | New → Re-check (re-requested, replies in your threads, new commits after you requested changes, or your review request is still open) → Waiting on author |
 
-- **One key does the obvious thing.** `enter` jumps to the PR's agent, or
-  starts the right one: a review, a re-check, or a report-only status check
-  of your own PR. `r` reviews, `c` re-checks (or, on your own PR, fixes
-  feedback, CI and conflicts), `d` ships approved PRs,
-  `n` starts an agent on a GitHub, Jira, Linear, YouTrack or Sentry issue.
-  Every prompt is
-  yours to configure.
+- **One key does the obvious thing.** `enter` (or a double-click) jumps to
+  the PR's agent, or starts the right one: a review, a re-check, or on your
+  own PR an agent in its checkout, waiting for you. `r` reviews, `c` checks
+  (re-checks others' PRs, reports on yours), `f` fixes feedback, CI and
+  conflicts on yours, `d` ships approved PRs, `n` starts an agent on a
+  GitHub, Jira, Linear, YouTrack or Sentry issue, or a blank one on a new
+  branch. Every prompt is yours to configure.
 - **Agents on the board.** Each card shows the agent working on that PR:
   spinner while working, a pulsing `?` when it waits on
   you, `✓` when done, and `deploying` instead of `working` for a ship.
@@ -45,8 +45,10 @@ each one in the right checkout.
   agent's pane.
 - **Notifications** for new review requests, PRs to re-check, and approvals,
   change requests, CI failures, conflicts and questions on your PRs.
-- **Cheap on the GitHub API.** A light scan every 3 minutes costs about 7
-  GraphQL points; full detail is fetched only for PRs that changed.
+- **Fast and cheap on the GitHub API.** A light scan every minute takes
+  about 2 seconds and costs about 7 GraphQL points; full detail is fetched
+  only for PRs that changed, and not for snoozed ones until they change or
+  you show them. `R` refetches everything in about 3 seconds.
 - **No dependencies.** Node 18+ and the GitHub CLI.
 
 <table>
@@ -116,16 +118,17 @@ for what changed); remove with the `remove-keybinding` action, then
 | `←→↑↓` (or `hjkl`) | move between columns and PRs |
 | `tab`, `1`, `2` | switch Mine / To review |
 | `r` | review: new agent in a worktree at the PR head |
-| `c` | To review: were your comments addressed? Mine: get the PR ready (fix feedback, CI, conflicts; draft replies). Reuses an idle agent already on the PR |
+| `c` | check. To review: were your comments addressed? Mine: a report-only status (feedback, CI, conflicts, approvals). Reuses an idle agent already on the PR |
+| `f` | fix, on your own PR: get it ready (fix feedback, CI, conflicts; draft replies). Reuses an idle agent already on the PR |
 | `d` | ship an approved PR (CI green, nothing to answer, no conflict), or every marked PR |
 | `space`, alt+click | mark a ready PR for a multi-ship; marks are numbered in shipping order, `esc` clears them |
 | `x` `x` | stop the card's agent (press twice). The PR stays on the board; see below for what is cleaned up |
 | `e` | rename an In progress card (no PR yet). `ctrl+u` clears; saving it empty brings back the agent's own title. The name is forgotten once the card's PR is open |
-| `enter` | jump to the PR's agent. No agent yet: review a new PR, re-check one with news since your review, or on your own PR a report-only status check (feedback, CI, conflicts). Does nothing on PRs waiting on their author |
-| `o` / `f` | open the PR / its changed files in the browser |
+| `enter`, double-click | jump to the PR's agent. No agent yet: review a new PR, re-check one with news since your review, or on your own PR start an agent in its checkout with no prompt and jump to it once it is up (any other key cancels the jump). Does nothing on PRs waiting on their author |
+| `o` | open the PR in the browser |
 | `y` | copy the PR URL (to the screen you look at, also over `herdr --remote`) |
 | `z` / `s` | snooze until the PR changes / show snoozed |
-| `n` | new task from a ticket: GitHub, Jira, Linear, YouTrack or Sentry (`tab` picks the tracker for a bare `PROJ-123`) |
+| `n` | new task from a ticket: GitHub, Jira, Linear, YouTrack or Sentry (`tab` picks the tracker for a bare `PROJ-123`). Anything else is a blank agent on a branch of that name; `enter` on an empty box, one on a `scratch-<date>` branch |
 | `a` | agent for new launches: Claude Code, Codex, ... (the ones installed; shown in the header) |
 | `/` | filter by repo, title or author |
 | `R`, `F5` | full rescan |
@@ -134,7 +137,8 @@ for what changed); remove with the `remove-keybinding` action, then
 | `q`, `esc` | close |
 
 Alt+click a card to mark it (Herdr popups keep plain clicks and the wheel
-for themselves). The bottom bar always shows the keys that apply to the
+for themselves); double-click it, or alt+double-click in a popup, for
+`enter`. The bottom bar always shows the keys that apply to the
 selected PR; when `enter` does the same as `r` or `c`, they share a chip
 (`↵ r REVIEW`).
 
@@ -146,11 +150,12 @@ selected PR; when `enter` does the same as `r` or `c`, they share a chip
   your own checkout is never touched. The plugin adds that folder to the
   clone's `.git/info/exclude` when git does not ignore it yet. A re-check moves a clean review worktree to
   the new head and reuses the agent if it is still open.
-- **Your own PRs** (`enter` for a status report, `c` to fix) prompt the agent
-  already on the PR when it is idle; otherwise they open your existing
-  checkout of the PR's branch (fast-forwarded to origin when clean) or a new
-  worktree of it. The status check only reports; the fix shows you
-  everything before committing, pushing or posting.
+- **Your own PRs** (`enter` for an agent with no prompt, `c` for a status
+  report, `f` to fix) prompt the agent already on the PR when it is idle;
+  otherwise they open your existing checkout of the PR's branch
+  (fast-forwarded to origin when clean) or a new worktree of it. The status
+  check only reports; the fix shows you everything before committing,
+  pushing or posting.
 - **Stopping** (`x` twice) closes the agent's pane, or its tab when it is
   the only pane (Herdr closes a workspace with its last tab). A clean review
   worktree (`pr-<N>`) is removed too; its branch stays. Task and fix
@@ -162,6 +167,8 @@ selected PR; when `enter` does the same as `r` or `c`, they share a chip
   `enter` on any of them jumps to the agent.
 - **Tasks** (`n`) create a worktree on a branch named after the ticket, from
   the remote default branch, and ask the agent for a plan before any code.
+  A blank agent gets the same worktree on the branch you named (an existing
+  one is reused) and no prompt; its card keeps the name you typed.
   Ctrl+click an issue link (GitHub, Jira Cloud, Linear, YouTrack Cloud,
   Sentry) in any Herdr pane to open the task box prefilled.
 
@@ -197,7 +204,7 @@ optional and changes apply on the next scan.
   "excludeRepos": ["acme/legacy"],
   "repoRoots": ["~/code"],
   "repos": { "acme/api": "~/work/api" },
-  "pollSeconds": 180,
+  "pollSeconds": 60,
   "agentKind": "claude",
   "icons": "nerd",
   "worktreePath": "{repo}/.claude/worktrees/pr-{number}",
@@ -232,7 +239,7 @@ optional and changes apply on the next scan.
 | `excludeRepos` | none | `owner/name` repos to hide |
 | `repoRoots` | `~/code`, `~/src`, `~/projects`, `~/repos`, `~/git`, `~/dev` | where clones live |
 | `repos` | | explicit `owner/name` → path |
-| `pollSeconds` | `180` | scan interval |
+| `pollSeconds` | `60` | scan interval |
 | `openLinks` | `auto` | `o` / `f`: `browser`, `copy` (OSC 52 to your terminal's clipboard), or `auto` (copy on a machine without a display, like plain SSH) |
 | `agentKind` | `claude` | default agent, any [Herdr agent kind](https://herdr.dev) |
 | `agents` | `auto` | agents `a` switches between; `auto` finds Claude Code, Codex, Gemini, OpenCode, Cursor, Copilot, Amp and Qwen on the PATH |

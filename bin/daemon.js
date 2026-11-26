@@ -16,6 +16,7 @@ writeJSON(paths.pid, process.pid);
 let prev = readJSON(paths.cache, null);
 let timer = null;
 let running = false;
+let queued = null; // a scan asked for during another: { full }
 let failures = 0;
 
 const label = (pr) => `${pr.repoName}#${pr.number}`;
@@ -55,8 +56,12 @@ function diff(before, after) {
 }
 
 // SIGUSR1: incremental scan. SIGUSR2 (the R key): refetch every PR's detail.
+// One asked for while a scan runs (R, opening the board) runs right after it.
 async function poll(full = false) {
-  if (running) return;
+  if (running) {
+    queued = { full: full || !!(queued && queued.full) };
+    return;
+  }
   running = true;
   try {
     // Doubles as the liveness check: no server, no reason to keep polling.
@@ -68,7 +73,11 @@ async function poll(full = false) {
   try {
     writeJSON(paths.cache, { ...(readJSON(paths.cache, {}) || {}), refreshing: true });
     const launched = Object.keys(readJSON(paths.agents, {}));
-    const next = await fetchAll(prev, { full, launched });
+    // Snoozed PRs stay hidden until they change: no detail refetch for them,
+    // unless the board shows snoozed PRs.
+    const ui = readJSON(paths.ui, {}) || {};
+    const snoozed = ui.showSnoozed ? {} : ui.snoozed || {};
+    const next = await fetchAll(prev, { full, launched, snoozed });
     writeJSON(paths.cache, next);
     if (prev && prev.prs) for (const [t, b, s] of diff(prev, next)) notify(t, b, s);
     prev = next;
@@ -83,7 +92,11 @@ async function poll(full = false) {
     writeJSON(paths.cache, { ...cur, refreshing: false, error: e.message, errorAt: new Date().toISOString(), authLost });
   } finally {
     running = false;
-    schedule();
+    if (queued) {
+      const q = queued;
+      queued = null;
+      poll(q.full);
+    } else schedule();
   }
 }
 

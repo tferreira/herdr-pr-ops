@@ -100,6 +100,10 @@ const saveUi = () => {
 const T = require("../lib/tickets");
 // New-task modal: { step: 0 ticket | 1 repo, input, kind, repoFilter, repoIdx }
 let task = null;
+// enter on my PR with no agent: jump to the agent it starts once it is up,
+// unless another key comes first or the launch fails.
+const JUMP_WAIT_MS = 120 * 1000;
+let jumpTo = null; // { url, until }
 
 const say = (text, color = C.cyan, ms = 3200) => (toast = { text, color, until: Date.now() + ms });
 
@@ -383,8 +387,21 @@ function pollAgents() {
       links = linkAgents(agents, data.prs, agentMap);
       saveTaskPrs();
       work = buildWork();
+      jumpWhenUp();
     } catch {}
   });
+}
+
+function jumpWhenUp() {
+  if (!jumpTo) return;
+  const L = launches[jumpTo.url];
+  if (Date.now() > jumpTo.until || (L && L.state === "error")) {
+    jumpTo = null;
+    return;
+  }
+  const pr = data.prs.find((p) => p.url === jumpTo.url);
+  const ag = pr && agentFor(pr);
+  if (ag && !(L && L.state === "starting")) quit(ag.pane_id);
 }
 
 // A task's PR, once linked, is saved with the task: a PR on a branch the
@@ -527,7 +544,7 @@ function launch(kind, prs, reusePane) {
     env: process.env,
   });
   child.unref();
-  const verb = { review: "REVIEW", recheck: "RE-CHECK", status: "STATUS CHECK", address: "ADDRESS COMMENTS", deploy: "DEPLOY" }[kind];
+  const verb = { review: "REVIEW", recheck: "RE-CHECK", status: "STATUS CHECK", address: "ADDRESS COMMENTS", open: "AGENT", deploy: "DEPLOY" }[kind];
   const who = AGENT_KINDS.length > 1 && !reusePane ? ` · ${agentKind.toUpperCase()}` : "";
   say(`▲ ${verb} LAUNCHING${who} · ${names}`, C.magenta);
 }
@@ -999,7 +1016,8 @@ function actionKeys(sel, key) {
     return out;
   }
   if (act) out += key(" ↵ ", act.label);
-  out += key(" c ", "FIX");
+  out += key(" c ", "CHECK");
+  out += key(" f ", "FIX");
   out += key(" d ", marked.length ? `DEPLOY ${marked.length}` : "DEPLOY", marked.length > 0 || (pr && canDeploy(pr) === true));
   out += key(" ␣ ", "MARK", !!(pr && canDeploy(pr) === true));
   return out;
@@ -1059,7 +1077,7 @@ function footerLines(sel, W, base) {
     ? S(" ", { bg: C.bg }) + key(" ↵ ", "SAVE (EMPTY: AGENT'S TITLE)") + key(" ^U ", "CLEAR") + key(" esc ", "CANCEL")
     : S(" ", { bg: C.bg }) +
     actionKeys(sel, key) +
-    (sel && sel.pr.work ? "" : key(" o ", "OPEN") + key(" f ", "FILES") + key(" z ", "SNOOZE")) +
+    (sel && sel.pr.work ? "" : key(" o ", "OPEN") + key(" z ", "SNOOZE")) +
     key(" / ", "FILTER") +
     key(" R ", "SCAN") +
     key(" n ", "TASK") +
@@ -1076,16 +1094,18 @@ function overlayHelp(out, W, H) {
     ["←→ ↑↓", "move between columns / PRs (hjkl too)"],
     ["tab  1 2", "switch MINE / TO REVIEW"],
     ["r", "review: new agent pane in a PR worktree (prompts.review)"],
-    ["c", "comments: re-check others' PRs / get mine ready (fix, draft replies)"],
+    ["c", "check: re-check others' PRs / report-only status of mine"],
+    ["f", "fix: get my PR ready (feedback, CI, conflicts; draft replies)"],
     ["d", "deploy: prompts.deploy (approved, CI green, no conflict)"],
     ["space", "mark for a multi-deploy (alt+click too); d ships all"],
-    ["enter", "jump to the PR's agent; none yet: review / re-check / status report"],
+    ["enter", "jump to the PR's agent; none yet: review / re-check / blank agent on mine"],
     ["x x", "stop the card's agent (press twice); the PR stays"],
     ["e", "rename an in-progress card (empty: the agent's title)"],
-    ["o / f", "open PR / files changed in the browser"],
+    ["o", "open the PR in the browser"],
+    ["dbl-click", "enter on a card (alt+double-click inside a Herdr popup)"],
     ["y", "copy PR url (to the screen you look at, also over --remote)"],
     ["z / s", "snooze until the PR changes / show snoozed"],
-    ["n", "new task from a ticket: GitHub, Jira, Linear, YouTrack, Sentry"],
+    ["n", "new task: a ticket (GitHub, Jira, Linear, YouTrack, Sentry) or a blank agent"],
     ["a", "agent for new launches: claude, codex, ... (the installed ones)"],
     [",", "settings: edit config.json in $EDITOR"],
     ["/", "filter by repo, title, author"],
@@ -1126,12 +1146,13 @@ function parsedTask() {
 
 function openTask(input) {
   task = { step: 0, input, kind: null, repoFilter: "", repoIdx: 0 };
-  if (parsedTask()) toRepoStep();
+  const t = parsedTask();
+  if (t && t.kind !== "blank") toRepoStep();
 }
 
 function toRepoStep() {
   const t = parsedTask();
-  if (!t) return say("PASTE A YOUTRACK ID/URL OR A SENTRY ISSUE", C.amber);
+  if (!t) return say("NOT A TICKET LINK PR//OPS KNOWS · PASTE AN ID, OR TYPE A BRANCH NAME", C.amber);
   task.step = 1;
   task.repoFilter = "";
   const known = DEMO ? null : T.repoForProject(t.project);
@@ -1185,8 +1206,28 @@ function renameKey(k) {
   else if (k.length === 1 && k >= " ") rename.input += k;
 }
 
+// scratch-1126-1432, with -2, -3... when that minute is already taken.
+function scratchId(all) {
+  const d = new Date();
+  const p = (n) => String(n).padStart(2, "0");
+  const base = `scratch-${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`;
+  const used = (id) => all[`task:${id}`] || agentMap[`task:${id}`];
+  let id = base;
+  for (let i = 2; used(id); i++) id = `${base}-${i}`;
+  return id;
+}
+
 function launchTask(t) {
+  if (t.kind === "blank" && !t.id) t = { ...t, id: scratchId(U.readJSON(U.paths.launches, {})) };
   if (DEMO) return say(`DEMO MODE · WOULD START ${t.id} IN ${t.repoName}`, C.violet);
+  // A blank agent's card is named after what you typed, not its terminal title.
+  if (t.kind === "blank" && t.title) {
+    const repo = (checkoutInfo(t.repoPath) || {}).repo;
+    if (repo) {
+      ui.titles[`${repo.toLowerCase()}#${t.id}`] = t.title;
+      saveUi();
+    }
+  }
   const all = U.readJSON(U.paths.launches, {});
   all[`task:${t.id}`] = { kind: "task", state: "starting", msg: "queued", at: new Date().toISOString(), task: t };
   U.writeJSON(U.paths.launches, all);
@@ -1197,7 +1238,7 @@ function launchTask(t) {
     env: process.env,
   });
   child.unref();
-  say(`▲ TASK LAUNCHING · ${t.id} → ${t.repoName}`, C.magenta, 5000);
+  say(`▲ ${t.kind === "blank" ? "BLANK AGENT" : "TASK"} LAUNCHING · ${t.id} → ${t.repoName}`, C.magenta, 5000);
 }
 
 function overlayTask(out, W, H) {
@@ -1212,14 +1253,18 @@ function overlayTask(out, W, H) {
 
   const lines = [B("╔" + "═".repeat(w - 2) + "╗"), row(gradient("◢◤ NEW TASK", C.cyan, C.magenta, { bg, bold: true })), row("")];
   lines.push(row(lab("TICKET", task.step === 0) + S(task.input + (task.step === 0 ? cursor : ""), { fg: C.white, bg, bold: true })));
-  if (t) {
+  if (!task.input.trim() && task.step === 0) {
+    lines.push(row(" ".repeat(9) + S("paste PROJ-123, owner/repo#12 or a GitHub, Jira, Linear, YouTrack, Sentry link", { fg: C.dim, bg })));
+    lines.push(row(" ".repeat(9) + S("or name a branch for a blank agent; ↵ now: a scratch branch", { fg: C.dim, bg })));
+  } else if (t) {
     const all = T.candidates(task.input);
     const next = all[(all.findIndex((c) => c.kind === t.kind) + 1) % all.length];
-    const kindCol = t.kind === "sentry" ? C.violet : C.cyan;
+    const kindCol = t.kind === "sentry" ? C.violet : t.kind === "blank" ? C.green : C.cyan;
     const hint = all.length > 1 && task.step === 0 ? `   tab: ${next.label}` : "";
-    lines.push(row(" ".repeat(9) + S(`◆ ${t.label.toUpperCase()} · ${t.id}`, { fg: kindCol, bg, bold: true }) + S(hint, { fg: C.dim, bg })));
+    const what = t.kind === "blank" ? (t.id ? `branch ${t.id}` : "a new scratch branch") : t.id;
+    lines.push(row(" ".repeat(9) + S(`◆ ${t.label.toUpperCase()} · ${what}`, { fg: kindCol, bg, bold: true }) + S(hint, { fg: C.dim, bg })));
   } else {
-    lines.push(row(" ".repeat(9) + S("paste PROJ-123, owner/repo#12, or a GitHub, Jira, Linear, YouTrack or Sentry link", { fg: C.dim, bg })));
+    lines.push(row(" ".repeat(9) + S("not a link PR//OPS knows: paste an ID, or type a branch name", { fg: C.amber, bg })));
   }
   lines.push(row(""));
   if (task.step === 1) {
@@ -1256,9 +1301,10 @@ function overlayTask(out, W, H) {
 
 // ── actions ────────────────────────────────────────────────────────────────
 // What enter does on a card without an agent: review new PRs, re-check
-// those with news since my review, a report-only status check on mine.
+// those with news since my review; on mine, an agent in the PR's checkout
+// with no prompt, jumped to once it is up.
 function enterAction(pr) {
-  if (pr.tab === "mine") return { kind: "status", label: "CHECK" };
+  if (pr.tab === "mine") return { kind: "open", label: "AGENT" };
   if (pr.col === 0) return { kind: "review", label: "REVIEW" };
   if (pr.col === 1) return { kind: "recheck", label: "RE-CHECK" };
   return { kind: null, label: "WAIT", why: "WAITING ON AUTHOR · NOTHING NEW SINCE YOUR REVIEW" };
@@ -1384,8 +1430,11 @@ function quit(after) {
 // SGR mouse. Herdr's popups only forward alt+click (plain clicks, ctrl+click
 // and the wheel stay with Herdr), so alt+click is the gesture: it selects a
 // card and marks it for deploy. Plain click (select) and the wheel are
-// handled too, for when they do arrive.
+// handled too, for when they do arrive. A second click on the same card
+// within DOUBLE_CLICK_MS is enter (an alt+double-click leaves the mark as it was).
 const DEBUG_INPUT = !DEMO && U.config().debugInput;
+const DOUBLE_CLICK_MS = 400;
+let lastClick = null; // { url, at, marked }
 function onMouse(k) {
   if (DEBUG_INPUT) U.log("mouse", JSON.stringify(k));
   const m = k.match(/^\x1b\[<(\d+);(\d+);(\d+)([Mm])$/);
@@ -1403,7 +1452,15 @@ function onMouse(k) {
   if (!c) return;
   const pr = data.prs.find((p) => p.url === c.url);
   ui.sel[ui.tab] = { url: c.url, col: c.col, pos: 0 };
-  if (b & (16 | 8) && pr) toggleMark(pr);
+  const alt = !!(b & (16 | 8));
+  if (lastClick && lastClick.url === c.url && Date.now() - lastClick.at < DOUBLE_CLICK_MS) {
+    if (lastClick.marked && pr) toggleMark(pr);
+    lastClick = null;
+    return onKey("\r");
+  }
+  const was = marked.includes(c.url);
+  if (alt && pr) toggleMark(pr);
+  lastClick = { url: c.url, at: Date.now(), marked: marked.includes(c.url) !== was };
 }
 
 // ── first-run setup ────────────────────────────────────────────────────────
@@ -1621,6 +1678,10 @@ function renderSetup(out, W, H, line) {
 
 function onKey(k) {
   if (setup) return setupKey(k);
+  if (jumpTo && k !== "\r" && !k.startsWith("\x1b[<")) {
+    jumpTo = null;
+    say("JUMP CANCELLED · THE AGENT KEEPS STARTING", C.violet, 2000);
+  }
   if (DEBUG_INPUT && k.startsWith("\x1b") && !k.startsWith("\x1b[<")) U.log("key", JSON.stringify(k));
   if (rename) return renameKey(k);
   if (k.startsWith("\x1b[<")) return onMouse(k);
@@ -1682,6 +1743,9 @@ function onKey(k) {
       return editConfig();
     case "s":
       ui.showSnoozed = !ui.showSnoozed;
+      saveUi();
+      // Snoozed PRs keep their last detail while hidden: bring them up to date.
+      if (ui.showSnoozed) refresh();
       say(ui.showSnoozed ? "SHOWING SNOOZED" : "HIDING SNOOZED", C.violet);
       return;
     case "q":
@@ -1725,14 +1789,16 @@ function onKey(k) {
   }
   switch (k) {
     case "r":
-    case "c": {
-      // c means "comments": re-check them on others' PRs, address them on mine.
-      if (pr.tab !== "review" && k === "r") return say("r REVIEWS PRS ON THE TO REVIEW TAB · c ADDRESSES COMMENTS HERE", C.amber);
+    case "c":
+    case "f": {
+      // c checks: re-check others' PRs, a report-only status of mine. f fixes mine.
+      if (pr.tab !== "review" && k === "r") return say("r REVIEWS PRS ON THE TO REVIEW TAB · c CHECKS, f FIXES HERE", C.amber);
+      if (pr.tab === "review" && k === "f") return say("f FIXES YOUR OWN PRS · c RE-CHECKS THIS ONE", C.amber);
       const L = launches[pr.url];
       if (L && L.state === "starting") return say("ALREADY LAUNCHING", C.amber);
       const ag = agentFor(pr);
       if (ag && !["idle", "done"].includes(ag.agent_status)) return say(`AGENT IS ${ag.agent_status.toUpperCase()} · ↵ TO JUMP`, C.amber);
-      const kind = pr.tab === "mine" ? "address" : k === "r" ? "review" : "recheck";
+      const kind = pr.tab === "mine" ? (k === "f" ? "address" : "status") : k === "r" ? "review" : "recheck";
       return launch(kind, pr, ag && ag.pane_id);
     }
     case " ":
@@ -1760,19 +1826,22 @@ function onKey(k) {
       const act = enterAction(pr);
       if (!act.kind) return say(act.why, C.blue);
       const L = launches[pr.url];
-      if (L && L.state === "starting") return say("ALREADY LAUNCHING", C.amber);
-      return launch(act.kind, pr);
+      if (act.kind === "open") jumpTo = { url: pr.url, until: Date.now() + JUMP_WAIT_MS };
+      if (L && L.state === "starting") return say(act.kind === "open" ? "STARTING · JUMPS WHEN READY" : "ALREADY LAUNCHING", C.amber);
+      launch(act.kind, pr);
+      if (act.kind === "open" && !DEMO) say(`▲ AGENT STARTING · ${pr.repoName}#${pr.number} · JUMPS WHEN READY`, C.magenta, 8000);
+      return;
     }
     case "o":
       return openLink(pr.url, "PR");
-    case "f":
-      return openLink(`${pr.url}/files`, "FILES");
     case "y":
       copy(pr.url);
       return say("⧉ URL COPIED", C.cyan, 1500);
     case "z":
       if (ui.snoozed[pr.url] === pr.updatedAt) {
         delete ui.snoozed[pr.url];
+        saveUi();
+        refresh();
         say("☀ UNSNOOZED", C.violet);
       } else {
         ui.snoozed[pr.url] = pr.updatedAt;
@@ -1881,7 +1950,7 @@ function main() {
   if (!DEMO) U.ensureDaemon();
   pollFiles();
   pollAgents();
-  if (!data.fetchedAt || Date.now() - Date.parse(data.fetchedAt) > 60000) setTimeout(refresh, 300);
+  if (!data.fetchedAt || Date.now() - Date.parse(data.fetchedAt) > 15000) setTimeout(refresh, 300);
 
   setInterval(pollFiles, 600);
   setInterval(pollAgents, 1500);

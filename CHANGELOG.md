@@ -3,6 +3,29 @@
 Versions follow [semantic versioning](https://semver.org). Before 1.0 the
 board, keys and config can still change between minor versions.
 
+## 0.11.0 - 2026-11-26
+
+### Added
+- Blank agents: anything in the `n` box that is not a ticket names a branch,
+  and the agent starts in a worktree on it with no prompt (`enter` on an
+  empty box: a `scratch-<date>` branch). The card keeps the name you typed.
+- `enter` on your own PR with no agent starts one in the PR's checkout with
+  no prompt and jumps to it once it is up.
+- Double-click a card (alt+double-click inside a Herdr popup) for `enter`.
+
+### Changed
+- Faster GitHub scans: a full rescan (`R`) takes about 3 s instead of about
+  10, a regular scan about 2 s. The three searches and the PR details are
+  fetched in parallel; PRs your agents worked on that were merged or closed
+  long ago are no longer fetched again on every scan; snoozed PRs keep their
+  last detail until they change or you show snoozed PRs.
+- Scans every 60 s instead of 180 (`pollSeconds`), and opening the board
+  rescans when the last scan is over 15 s old. An `R` pressed during a scan
+  runs right after it instead of being dropped.
+- On your own PRs, `c` now checks (the report-only status that `enter` ran
+  before) and `f` fixes (what `c` did). `f` no longer opens the PR's changed
+  files; `o` still opens the PR.
+
 ## 0.10.6 - 2026-11-17
 
 ### Fixed

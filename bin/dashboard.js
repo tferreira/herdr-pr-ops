@@ -1155,7 +1155,8 @@ function toRepoStep() {
   if (!t) return say("NOT A TICKET LINK PR//OPS KNOWS · PASTE AN ID, OR TYPE A BRANCH NAME", C.amber);
   task.step = 1;
   task.repoFilter = "";
-  const known = DEMO ? null : T.repoForProject(t.project);
+  // A Sentry project's repo, else the repo a pasted summary starts with.
+  const known = DEMO ? null : T.repoForProject(t.project) || (t.kind !== "blank" && T.repoForTitle(t.title));
   const list = repoChoices();
   task.repoIdx = Math.max(0, known ? list.findIndex((r) => r.path === known.path) : 0);
 }
@@ -1220,8 +1221,9 @@ function scratchId(all) {
 function launchTask(t) {
   if (t.kind === "blank" && !t.id) t = { ...t, id: scratchId(U.readJSON(U.paths.launches, {})) };
   if (DEMO) return say(`DEMO MODE · WOULD START ${t.id} IN ${t.repoName}`, C.violet);
-  // A blank agent's card is named after what you typed, not its terminal title.
-  if (t.kind === "blank" && t.title) {
+  // The card is named after what you typed (a blank agent) or the summary
+  // pasted after the ticket, not the agent's terminal title.
+  if (t.title) {
     const repo = (checkoutInfo(t.repoPath) || {}).repo;
     if (repo) {
       ui.titles[`${repo.toLowerCase()}#${t.id}`] = t.title;

@@ -3,6 +3,16 @@
 Versions follow [semantic versioning](https://semver.org). Before 1.0 the
 board, keys and config can still change between minor versions.
 
+## 0.12.0 - 2026-11-27
+
+### Added
+- A ticket pasted with its summary (YouTrack's or Jira's "copy ID and
+  summary", `CORE-12 api: fix login`) starts a task on that ticket. Only the
+  first word is read as the ticket; the rest names the card and is added to
+  the agent's prompt, and a leading `<repo>:` that matches a clone
+  preselects that repo. Before, the whole line became a blank agent's
+  branch name.
+
 ## 0.11.0 - 2026-11-26
 
 ### Added

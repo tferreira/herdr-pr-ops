@@ -280,6 +280,11 @@ name or a `sentryProjects` key reads as a Sentry short ID. Each tracker uses
 `prompts.<name>` when set, else `prompts.ticket` (`{label}`, `{id}`, `{url}`,
 `{urlNote}`).
 
+Only the first word is read as the ticket, so a tracker's "copy ID and
+summary" works as pasted: in `CORE-12 api: fix login`, the rest names the
+card and is added to the prompt, and a leading `<repo>:` that matches a
+clone preselects that repo.
+
 ## Remote machines (`herdr --remote`)
 
 Install PR//OPS only on the machine that runs the Herdr server, with Node,

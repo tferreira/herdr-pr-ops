@@ -369,7 +369,7 @@ async function runTask(t) {
   const fresh = readJSON(paths.agents, {});
   fresh[url] = {
     task: pane,
-    meta: { kind: t.kind, label: t.label, id: t.id, url: t.url, repoName: t.repoName, repo: (checkoutInfo(t.repoPath) || {}).repo, branch },
+    meta: { kind: t.kind, label: t.label, id: t.id, url: t.url, title: t.title || null, repoName: t.repoName, repo: (checkoutInfo(t.repoPath) || {}).repo, branch },
   };
   writeJSON(paths.agents, fresh);
   // A blank agent starts with nothing to do: you type the first prompt.
@@ -383,7 +383,9 @@ async function runTask(t) {
   const P = promptsFor(agentKind);
   const custom = (cfg.trackers || []).find((x) => x.name === t.kind);
   const tpl = (custom && custom.prompt) || P[t.kind] || P.ticket;
-  const text = fill(tpl, { id: t.id, label: t.label, url: t.url || "", urlNote: t.url ? ` (${t.url})` : "" });
+  let text = fill(tpl, { id: t.id, label: t.label, url: t.url || "", urlNote: t.url ? ` (${t.url})` : "" });
+  // What was pasted after the ticket (a tracker's "copy ID and summary").
+  if (t.title) text += ` Summary as pasted: ${t.title}`;
   promptAgent(pane, text, agentKind);
   setStatus("done");
   herdr(["notification", "show", `${t.label} task started`, "--body", `${t.id} in ${t.repoName}`, "--sound", "none"]);
